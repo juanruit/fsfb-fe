@@ -1,0 +1,15 @@
+BROKER SCHEMA electronic.bill.v2.sendbill.orq
+
+
+CREATE COMPUTE MODULE SendBillOrq_Req_CmpRqHeadFedos
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		SET OutputLocalEnvironment 			= InputLocalEnvironment;
+		SET OutputRoot.MQMD.MsgId 			= InputRoot.MQMD.MsgId;
+		SET OutputRoot.MQMD.CorrelId		= InputRoot.MQMD.MsgId;
+		SET OutputRoot.MQRFH2				= InputRoot.MQRFH2;
+		
+		SET OutputRoot.XMLNSC				= InputRoot.XMLNSC;
+		RETURN TRUE;
+	END;
+END MODULE;

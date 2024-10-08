@@ -1,0 +1,40 @@
+BROKER SCHEMA electronic.bill.v2.sendbill.orq
+ 
+ 
+CREATE COMPUTE MODULE SendBillOrq_Resp_CreateMsgResponse
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		DECLARE refEnv REFERENCE TO Environment;
+			--Copiar cabeceras
+		SET OutputRoot.MQMD.MsgId 		= refEnv.Variables.headers.MQMD.MsgId;				
+		SET OutputRoot.MQMD.CorrelId 	= refEnv.Variables.headers.MQMD.CorrelId;
+		SET OutputRoot.MQMD.ReplyToQ 	= refEnv.Variables.headers.MQMD.ReplyToQ;
+		SET OutputRoot.MQRFH2 			= refEnv.Variables.headers.MQRFH2;
+  
+		--Declare referencia Datos de respuesta
+		DECLARE refMQRFH2 REFERENCE TO InputRoot.MQRFH2;
+  
+		/******************************************************/
+		-- Declaración ref mensaje de entrada
+		/******************************************************/
+		DECLARE refInp REFERENCE TO InputRoot.XMLNSC;
+		MOVE refInp LASTCHILD;
+		MOVE refInp LASTCHILD;
+  
+	    /******************************************************/
+		-- Creación mensaje de respuesta
+		/******************************************************/
+		CREATE FIELD OutputRoot.XMLNSC.EBILL_Res;
+		DECLARE refOut REFERENCE TO OutputRoot.XMLNSC.EBILL_Res;
+  
+		--Creación del mensaje de error de fachada
+		SET refOut.ContextTransaction.IdTransaction 		= COALESCE(refMQRFH2.usr.contextTransaction.IdTransaction,'00000');
+		SET refOut.ContextTransaction.IdTransaction_2 		= COALESCE(refMQRFH2.usr.contextTransaction.IdTransaction_2,'00000');
+		SET refOut.ContextTransaction.CodeTransaction 		= 'E';
+		SET refOut.ContextTransaction.DescTransaction 		= refInp.desc;
+		SET refOut.Status.Code								= 'E';
+		SET refOut.Status.Desc								= refInp.desc;
+  
+		RETURN TRUE;
+	END;
+END MODULE;

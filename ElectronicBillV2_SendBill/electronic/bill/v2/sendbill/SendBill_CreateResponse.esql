@@ -1,0 +1,87 @@
+BROKER SCHEMA electronic.bill.v2.sendbill
+
+DECLARE SERVICE_RS_TRACE CONSTANT INTEGER	'3';
+
+CREATE COMPUTE MODULE SendBill_CreateResponse
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		DECLARE NM_COMPONENT CHARACTER 'ELECTRONIC.BILL.V2';
+		
+		/******************************************************/
+		-- Declarar referencias
+		/******************************************************/
+		DECLARE refEnv REFERENCE TO Environment;
+		
+		/******************************************************/
+		-- Copiar identificadores de mensaje
+		/******************************************************/
+		SET OutputRoot.MQMD.MsgId 		= CAST(refEnv.Variables.headers.MQMD.MsgId AS BLOB);
+		SET OutputRoot.MQMD.CorrelId 	= CAST(refEnv.Variables.headers.MQMD.CorrelId AS BLOB);
+		SET OutputRoot.MQMD.ReplyToQ 	= TRIM(refEnv.Variables.headers.MQMD.ReplyToQ);
+		SET OutputRoot.MQRFH2 			= refEnv.Variables.headers.MQRFH2;
+		
+		--Declarar referencia
+		DECLARE refMQRFH2 REFERENCE TO OutputRoot.MQRFH2;
+		
+		/******************************************************/
+		-- Setear información para auditoría
+		/******************************************************/
+		DECLARE refDataInp REFERENCE TO InputRoot;
+		MOVE refDataInp LASTCHILD;
+		
+		SET OutputRoot.{FIELDNAME(refDataInp)}		= refDataInp;
+		CALL common.procedures.utils.createMsgLogs(refMQRFH2,SERVICE_RS_TRACE,NM_COMPONENT);
+		PROPAGATE TO TERMINAL 'out1' DELETE NONE;
+		SET OutputRoot.{FIELDNAME(refDataInp)}		= 	NULL;
+		/******************************************************/
+		
+		--Nombre de mensajes de respuesta
+		DECLARE nmElementRs CHARACTER COALESCE(refMQRFH2.usr.response.MQ.nmNode, 'ApplicationFault');
+		
+		/******************************************************/
+		-- Declaración de namespaces propios de servicio
+		/******************************************************/
+		--Creación de mensaje de salida.
+		DECLARE refOut REFERENCE TO OutputRoot;
+		CREATE FIELD OutputRoot.XMLNSC.{nmElementRs};
+		MOVE refOut TO OutputRoot.XMLNSC.{nmElementRs};
+		
+		IF EXISTS(InputRoot.JSON[]) THEN
+			DECLARE refInp REFERENCE TO InputRoot.JSON;
+			MOVE refInp LASTCHILD;
+		
+			IF FIELDVALUE(refInp.esExitoso) THEN
+				SET refOut.ContextTransaction.IdTransaction 					= refMQRFH2.usr.contextTransaction.IdTransaction;
+				SET refOut.ContextTransaction.CodeTransaction 					= 'P';
+				SET refOut.ContextTransaction.DescTransaction 					= refInp.mensaje;
+				SET refOut.ContextTransaction.Identificador 					= refInp.identificador;	
+			ELSE
+				SET refOut.ContextTransaction.IdTransaction 					= refMQRFH2.usr.contextTransaction.IdTransaction;
+				SET refOut.ContextTransaction.CodeTransaction 					= 'E';
+				SET refOut.ContextTransaction.DescTransaction 					= 'Error';
+				SET refOut.ContextTransaction.Identificador 					= refInp.identificador;
+			END IF;
+		ELSEIF EXISTS(InputRoot.BLOB[]) THEN
+			DECLARE refResult REFERENCE TO InputLocalEnvironment.result;
+			CREATE FIRSTCHILD OF refResult DOMAIN('JSON') PARSE(InputRoot.BLOB.BLOB);
+            MOVE refResult TO refResult.JSON;
+            MOVE refResult LASTCHILD;
+            
+            IF refResult.EsExitoso = 'false'  THEN
+            	SET refOut.ContextTransaction.IdTransaction 					= refMQRFH2.usr.contextTransaction.IdTransaction;
+				SET refOut.ContextTransaction.CodeTransaction 					= 'E';
+				SET refOut.ContextTransaction.DescTransaction 					= COALESCE(refResult.Errors,'Error en transacción');
+            ELSE
+            	SET refOut.ContextTransaction.IdTransaction 					= refMQRFH2.usr.contextTransaction.IdTransaction;
+				SET refOut.ContextTransaction.CodeTransaction 					= 'P';
+				SET refOut.ContextTransaction.DescTransaction 					= 'Transacción Exitosa';
+            END IF;
+		ELSE
+			SET refOut.ContextTransaction.IdTransaction 					= refMQRFH2.usr.contextTransaction.IdTransaction;
+			SET refOut.ContextTransaction.CodeTransaction 					= 'E';
+			SET refOut.ContextTransaction.DescTransaction 					= CAST(InputRoot.HTTPResponseHeader."X-Original-HTTP-Status-Code" AS CHARACTER) || ' : ' ||InputRoot.HTTPResponseHeader."X-Original-HTTP-Status-Line";
+		END IF;
+		
+		RETURN TRUE;
+	END;
+END MODULE;

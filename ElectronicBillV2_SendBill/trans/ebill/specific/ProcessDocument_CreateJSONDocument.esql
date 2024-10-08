@@ -1,0 +1,591 @@
+BROKER SCHEMA trans.EBILL.specific
+
+DECLARE SERVICE_RQ_TRACE CONSTANT INTEGER	'2';
+DECLARE DEFAULT_ENCODING CONSTANT INTEGER 1252;
+DECLARE DEFAULT_CCSID CONSTANT INTEGER 1209;
+DECLARE INTERFACE_DATA CONSTANT CHARACTER 'INTERFACE_DATA';
+DECLARE TIMEOUT_BACKEND CONSTANT CHARACTER 'TIMEOUT_BACKEND';
+
+--udp que define el usuario y password
+DECLARE USR EXTERNAL CHARACTER '';
+DECLARE PSW EXTERNAL CHARACTER '';
+DECLARE URL_BACKEND EXTERNAL CHARACTER '';
+
+
+DECLARE DETALLE_TIPO EXTERNAL CHARACTER '';
+DECLARE SUBDETALLE_TIPO EXTERNAL CHARACTER '';
+DECLARE UNIDADES EXTERNAL CHARACTER '';
+
+DECLARE CODE_FILTER EXTERNAL CHARACTER '';
+
+
+CREATE COMPUTE MODULE ProcessDocument_CreateJSONDocument
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		DECLARE NM_COMPONENT CHARACTER 'ELECTRONIC.BILL.V2';
+		--DECLARE specialCharLine CHARACTER CAST(X'0A' AS CHARACTER CCSID InputRoot.MQMD.CodedCharSetId);
+		
+		/******************************************************/
+		-- Copiar cabeceras de mensaje
+		/******************************************************/
+		SET OutputRoot.MQMD 	= InputRoot.MQMD;
+		SET OutputRoot.MQRFH2 	= InputRoot.MQRFH2;
+		
+		--Set username y password
+		SET OutputRoot.HTTPRequestHeader."Authorization" = 'Basic '||base64Encode(CAST(USR||':'||PSW as BLOB CCSID 1208));
+		
+		/******************************************************/
+		-- Declarar referencias
+		/******************************************************/
+		DECLARE refEnv REFERENCE TO Environment;
+		DECLARE refMQRFH2 REFERENCE TO OutputRoot.MQRFH2;
+		DECLARE refInpRoot REFERENCE TO OutputRoot;
+		
+		/******************************************************/
+		-- Setear información para auditoría y headers
+		/******************************************************/
+		CALL common.procedures.utils.createMsgLogs(refMQRFH2, SERVICE_RQ_TRACE, NM_COMPONENT);
+		CALL common.procedures.utils.saveMQM(refInpRoot, refEnv);
+		
+		/******************************************************/
+		-- Declarar referencia a objeto de entrada
+		/******************************************************/
+		DECLARE refInp REFERENCE TO InputRoot.XMLNSC;
+		MOVE refInp LASTCHILD;
+		
+		/***************************************************************************/
+		-- Referencia a consulta HeadFedos
+		/***************************************************************************/
+		DECLARE refHeadFedos REFERENCE TO refInp.HEADFEDOS;
+		MOVE refHeadFedos LASTCHILD;
+		--DECLARE headFedos CHARACTER com.common.global.cache.getGlobalCache(refHeadFedos.Cache.Id,refHeadFedos.Cache.NmCache);
+		DECLARE headFedos CHARACTER com.common.global.cache.removeGlobalCache(refHeadFedos.Cache.Id,refHeadFedos.Cache.NmCache);
+		
+    	CREATE LASTCHILD OF refHeadFedos DOMAIN('XMLNSC') PARSE(headFedos CCSID 1209);
+    	MOVE refHeadFedos LASTCHILD;
+    	MOVE refHeadFedos LASTCHILD;
+    	MOVE refHeadFedos LASTCHILD;
+    	MOVE refHeadFedos LASTCHILD;
+    	
+    	/***************************************************************************/
+		-- Referencia a consulta antabofedos
+		/***************************************************************************/
+		DECLARE refAntaboFedos REFERENCE TO refInp.ANTABOFEDOS;
+		MOVE refAntaboFedos LASTCHILD;
+    	
+		DECLARE antaboFedos CHARACTER com.common.global.cache.removeGlobalCache(refAntaboFedos.Cache.Id,refAntaboFedos.Cache.NmCache);
+		
+    	CREATE LASTCHILD OF refAntaboFedos DOMAIN('XMLNSC') PARSE(antaboFedos CCSID 1209);
+    	MOVE refAntaboFedos LASTCHILD;
+    	MOVE refAntaboFedos LASTCHILD;
+    	MOVE refAntaboFedos LASTCHILD;
+    	
+		/***************************************************************************/
+		-- Referencia a consulta detailCuentasMed
+		/***************************************************************************/
+		DECLARE refDetailCuentasMed REFERENCE TO refInp.DETAILCUENTASMED;
+		MOVE refDetailCuentasMed LASTCHILD;
+    	
+		DECLARE detailCuentasMed CHARACTER com.common.global.cache.removeGlobalCache(refDetailCuentasMed.Cache.Id,refDetailCuentasMed.Cache.NmCache);
+		
+    	CREATE LASTCHILD OF refDetailCuentasMed DOMAIN('XMLNSC') PARSE(detailCuentasMed CCSID 1209);
+    	MOVE refDetailCuentasMed LASTCHILD;
+    	MOVE refDetailCuentasMed LASTCHILD;
+    	MOVE refDetailCuentasMed LASTCHILD;
+    	MOVE refDetailCuentasMed LASTCHILD;
+    	
+    	/***************************************************************************/
+		-- Referencia a consulta detailFedos
+		/***************************************************************************/
+		DECLARE refDetailFedos REFERENCE TO refInp.DETAILFEDOS;
+		MOVE refDetailFedos LASTCHILD;
+    	
+		DECLARE detailFedos CHARACTER  com.common.global.cache.removeGlobalCache(refDetailFedos.Cache.Id,refDetailFedos.Cache.NmCache);
+		
+    	CREATE LASTCHILD OF refDetailFedos DOMAIN('XMLNSC') PARSE(detailFedos CCSID 1209);
+    	MOVE refDetailFedos LASTCHILD;
+    	MOVE refDetailFedos LASTCHILD;
+    	MOVE refDetailFedos LASTCHILD;
+    	
+    	/***************************************************************************/
+		-- Referencia a consulta detailFedos
+		/***************************************************************************/
+		DECLARE refTributoFedos REFERENCE TO refInp.TRIBUTOSFEDOS;
+		MOVE refTributoFedos LASTCHILD;
+    	
+		DECLARE tributosFedos CHARACTER com.common.global.cache.removeGlobalCache(refTributoFedos.Cache.Id,refTributoFedos.Cache.NmCache);
+		
+    	CREATE LASTCHILD OF refTributoFedos DOMAIN('XMLNSC') PARSE(tributosFedos CCSID 1209);
+    	MOVE refTributoFedos LASTCHILD;
+    	MOVE refTributoFedos LASTCHILD;
+    	MOVE refTributoFedos LASTCHILD;
+    	--MOVE refTributoFedos LASTCHILD;
+    	
+    	/***************************************************************************/
+		-- Referencia a consulta subDetailFedos
+		/***************************************************************************/
+		DECLARE refSubDetailsFedos REFERENCE TO refInp.SUBDETAILFEDOS;
+		MOVE refSubDetailsFedos LASTCHILD;
+    	
+		DECLARE subDetailsFedos CHARACTER com.common.global.cache.removeGlobalCache(refSubDetailsFedos.Cache.Id,refSubDetailsFedos.Cache.NmCache);
+		
+    	CREATE LASTCHILD OF refSubDetailsFedos DOMAIN('XMLNSC') PARSE(subDetailsFedos CCSID 1209);
+    	MOVE refSubDetailsFedos LASTCHILD;
+    	MOVE refSubDetailsFedos LASTCHILD;
+    	MOVE refSubDetailsFedos LASTCHILD;
+    	
+    	/***************************************************************************/
+		-- Referencia a consulta subDetailFedos
+		/***************************************************************************/
+		DECLARE refSubDetailsFedosTributos REFERENCE TO refInp.SUBDETAILFEDOSTRIBUTOS;
+		MOVE refSubDetailsFedosTributos LASTCHILD;
+    	
+		DECLARE subDetailsFedosTributos CHARACTER  com.common.global.cache.removeGlobalCache(refSubDetailsFedosTributos.Cache.Id,refSubDetailsFedosTributos.Cache.NmCache);
+		
+    	CREATE LASTCHILD OF refSubDetailsFedosTributos DOMAIN('XMLNSC') PARSE(subDetailsFedosTributos CCSID 1209);
+    	MOVE refSubDetailsFedosTributos LASTCHILD;
+    	MOVE refSubDetailsFedosTributos LASTCHILD;
+    	MOVE refSubDetailsFedosTributos LASTCHILD;
+    	
+    	/***************************************************************************/
+		-- Referencia a consulta subDetailFedos
+		/***************************************************************************/
+		DECLARE refHeadDetallesMed REFERENCE TO refInp.HEADCUENTASMED;
+		MOVE refHeadDetallesMed LASTCHILD;
+    	
+		DECLARE headDetallesMed CHARACTER  com.common.global.cache.removeGlobalCache(refHeadDetallesMed.Cache.Id,refHeadDetallesMed.Cache.NmCache);
+		
+    	CREATE LASTCHILD OF refHeadDetallesMed DOMAIN('XMLNSC') PARSE(headDetallesMed CCSID 1209);
+    	MOVE refHeadDetallesMed LASTCHILD;
+    	MOVE refHeadDetallesMed LASTCHILD;
+    	MOVE refHeadDetallesMed LASTCHILD;
+    	
+    	/******************************************************/
+		-- Creación mensaje para backend
+		/******************************************************/
+		CREATE FIELD OutputRoot.JSON.Data;
+		DECLARE refOut REFERENCE TO OutputRoot.JSON.Data;
+		
+		SET refOut.evento 										= TRIM(refMQRFH2.usr.event_name);
+		
+		SET refOut.datos.documento.NITFacturador 				= TRIM(refHeadFedos.DMTO_NITFACTURADOR);
+		SET refOut.datos.documento.prefijo 						= TRIM(refHeadFedos.DMTO_PREFIJO);
+		SET refOut.datos.documento.numeroDocumento 				= TRIM(refHeadFedos.DMTO_NUMERODMTO);
+		SET refOut.datos.documento.tipoDocumento				= cast(com.common.global.cache.getHomologation('HIS','TRANSV2','TIPODOC_ID',TRIM(refHeadFedos.DMTO_TIPODMTO)) AS INTEGER);
+		SET refOut.datos.documento.tipoOperacion				= com.common.global.cache.getHomologation('HIS','TRANSV2','OPERATIONTYPE',TRIM(refHeadFedos.TIPOOPERACION));
+		SET refOut.datos.documento.subTipoDocumento				= com.common.global.cache.getHomologation('HIS','TRANSV2','SUBTIPODOC_ID',TRIM(refHeadFedos.DMTO_SUBTIPODMTO));
+		
+		DECLARE code CHARACTER refHeadFedos.DMTO_TIPODMTO || '_' || REPLACE(refHeadFedos.DMTO_PLANTILLA,' ','_');
+		SET refOut.datos.documento.plantilla						= com.common.global.cache.getHomologation('HIS','TRANSV2','BILLTYPE',code);
+		SET refOut.datos.documento.generaRepresentacionGrafica		= CAST(com.common.global.cache.getHomologation('HIS','TRANSV2','GRAPHICSGEN',refHeadFedos.DMTO_GENERAREPGRAFICA) AS BOOLEAN);
+		SET refOut.datos.documento.fechaEmision						= com.common.utils.functions.getMyDateWhitFormat(TRIM(refHeadFedos.DMTO_FECHAEMISION),'yyyy-MM-dd');
+		SET refOut.datos.documento.horaEmision						= com.common.utils.functions.getMyHourWhitFormat(TRIM(refHeadFedos.DMTO_HORAEMISION),'HH:mm:ssZZZ');
+		SET refOut.datos.documento.fechaVencimiento					= com.common.utils.functions.getMyDateWhitFormat(TRIM(refHeadFedos.DMTO_FECHAVENCIMIENTO),'yyyy-MM-dd');
+		SET refOut.datos.documento.fechaInicioPeriodo				= com.common.utils.functions.getMyDateWhitFormat(TRIM(refDetailCuentasMed.AC_FECHAINGRESO),'yyyy-MM-dd');
+		SET refOut.datos.documento.horaInicioPeriodo				= com.common.utils.functions.getMyHourWhitFormat(TRIM(refDetailCuentasMed.AC_HORAINGRESO),'HH:mm:ssZZZ');
+		SET refOut.datos.documento.fechaFinPeriodo					= com.common.utils.functions.getMyDateWhitFormat(TRIM(refDetailCuentasMed.AC_FECHAEGRESO),'yyyy-MM-dd');
+		SET refOut.datos.documento.horaFinPeriodo					= com.common.utils.functions.getMyHourWhitFormat(TRIM(refDetailCuentasMed.AC_HORAEGRESO),'HH:mm:ssZZZ');
+		SET refOut.datos.documento.moneda							= TRIM(refHeadFedos.DMTO_MONEDA);
+		SET refOut.datos.documento.codigoCentroCostos				= TRIM(refHeadFedos.DMTO_CODIGOCENTROCOSTOS);
+		SET refOut.datos.documento.descripcionCodigoCentroCostos	= TRIM(refHeadFedos.DESCRIPCODIGOCENTROCOSTO);
+		
+		--Documento Afectados
+		IF refHeadFedos.DMTO_TIPODMTO <> 1 THEN
+			SET refOut.datos.documento.(JSON.Array)documentosAfectados.d[1].numeroDocumento								= TRIM(refHeadFedos.DMTOSAFECTADOS_NUMERODMTO);
+			SET refOut.datos.documento.(JSON.Array)documentosAfectados.d[1].codigoCausal								= CAST(TRIM(refHeadFedos.DMTOSAFECTADOS_CODIGOCAUSAL) AS INTEGER);
+			IF LENGTH(refHeadFedos.DMTOSAFECTADOS_OBSERVACIONES) > 2  THEN
+				SET refOut.datos.documento.(JSON.Array)documentosAfectados.d[1].(JSON.Array)observaciones.d[1]				= TRIM(refHeadFedos.DMTOSAFECTADOS_OBSERVACIONES);	
+			ELSE
+				SET refOut.datos.documento.(JSON.Array)documentosAfectados.d[1].(JSON.Array)observaciones.d[1]				= '  ';
+			END IF;
+		END IF;
+		
+		--Contacto de entrega
+		SET refOut.datos.documento.contactoEntrega.nombre			= com.common.utils.functions.getTwoSpaceValue(TRIM(refHeadFedos.DMTO_CONTACTOENTREGA_NOMBRE));
+		
+		--Notificaciones
+		SET refOut.datos.documento.(JSON.Array)notificaciones.d[1].tipo								= CAST(TRIM(refHeadFedos.DMTO_NOTIFICACIONES_TIPO) as INTEGER);
+		IF(LENGTH(TRIM(refHeadFedos.ADQUIRIENTE_CORREO)) > 0) THEN
+			SET refOut.datos.documento.(JSON.Array)notificaciones.d[1].(JSON.Array)valor.d[1] = TRIM(refHeadFedos.ADQUIRIENTE_CORREO);
+		ELSEIF LENGTH(TRIM(refHeadFedos.DMTO_CONTACTOENTREGA_CORREO)) > 0 THEN
+			SET refOut.datos.documento.(JSON.Array)notificaciones.d[1].(JSON.Array)valor.d[1] = TRIM(refHeadFedos.DMTO_CONTACTOENTREGA_CORREO);
+		ELSE
+	 		SET refOut.datos.documento.(JSON.Array)notificaciones.d[1].(JSON.Array)valor.d[1] = 'adquiriente.fe@fsfb.org.co';
+		END IF;
+		
+		--TRM
+		IF refHeadFedos.DMTO_PLANTILLA = 'AZV' OR (refHeadFedos.DMTO_PLANTILLA = 'Manual_Grexco' AND refHeadFedos.DMTO_TRM_MONEDAORIGEN = 'USD' ) THEN
+			SET refOut.datos.documento.TRM.valor										= CAST(TRIM(refHeadFedos.DMTO_TRM_VALOR) as DECIMAL);
+			SET refOut.datos.documento.TRM.monedaOrigen									= TRIM(refHeadFedos.DMTO_TRM_MONEDAORIGEN);
+			SET refOut.datos.documento.TRM.fecha										= com.common.utils.functions.getMyDateWhitFormat(TRIM(refHeadFedos.DMTO_TRM_FECHA),'yyyy-MM-dd');
+			SET refOut.datos.documento.TRM.monedaDestino								= com.common.utils.functions.getTwoSpaceValue(TRIM(refHeadFedos.DMTO_TRM_MONEDADESTINO));	
+		END IF;
+		
+		--Formas pagoD
+		SET refOut.datos.documento.formaPago.tipoPago									= CAST(TRIM(refHeadFedos.DMTO_FORMAPAGO_TIPOPAGO) AS INTEGER);
+		SET refOut.datos.documento.formaPago.codigoMedio								= TRIM(refHeadFedos.DMTO_FORMAPAGO_CODIGOMEDIO);
+		SET refOut.datos.documento.formaPago.fechaVencimiento							= com.common.utils.functions.getMyDateWhitFormat(TRIM(refHeadFedos.DMTO_FORMAPAGO_FECHAVENCIMIENTO),'yyyy-MM-dd');
+		
+		--Información adicional
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[1].nombre		= 'CodigoHabitacion';
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[1].valor		= com.common.utils.functions.getTwoSpaceValue(TRIM(refDetailCuentasMed.AC_IDENTIFICACION_IPS));
+		
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[2].nombre		= 'NumeroIngreso';
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[2].valor		= com.common.utils.functions.getTwoSpaceValue(TRIM(refDetailCuentasMed.AC_NUMEROINGRESO));
+		
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[3].nombre		= 'CodigoAsistenciaComplementaria';
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[3].valor		= com.common.utils.functions.getTwoSpaceValue(TRIM(refDetailCuentasMed.AC_IDENTIFICACION_IPS));
+		
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[4].nombre		= 'NumeroAutorizacion';
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[4].valor		= com.common.utils.functions.getTwoSpaceValue(TRIM(refDetailCuentasMed.AC_NUMEROAUTORIZACION));
+		
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[5].nombre		= 'TipoDocumentoPaciente';
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[5].valor		= com.common.global.cache.getHomologation('HIS','TRANSV2','TIPO_ID',TRIM(refDetailCuentasMed.AC_TIPODOCPACIENTE));
+		
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[6].nombre		= 'NumeroDocumentoPaciente';
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[6].valor		= com.common.utils.functions.getTwoSpaceValue(TRIM(refDetailCuentasMed.AC_NRODOCPACIENTE));
+		
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[7].nombre		= 'PrimerNombrePaciente';
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[7].valor		= com.common.utils.functions.getTwoSpaceValue(TRIM(refDetailCuentasMed.AC_PRIMERNOMBRE));
+		
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[8].nombre		= 'SegundoNombrePaciente';
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[8].valor		= com.common.utils.functions.getTwoSpaceValue(TRIM(refDetailCuentasMed.AC_SEGUNDONOMBRE));
+		
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[9].nombre		= 'PrimerApellidoPaciente';
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[9].valor		= com.common.utils.functions.getTwoSpaceValue(TRIM(refDetailCuentasMed.AC_PRIMERAPELLIDO));
+		
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[10].nombre	= 'SegundoApellidoPaciente';
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[10].valor		= com.common.utils.functions.getTwoSpaceValue(TRIM(refDetailCuentasMed.AC_SEGUNDOAPELLIDO));
+		
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[11].nombre	= 'FechaNacimientoPaciente';
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[11].valor		= com.common.utils.functions.getMyDateWhitFormat(TRIM(refDetailCuentasMed.AC_FECHANACIMIENTO),'yyyy-MM-dd');
+		
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[12].nombre	= 'TipoAfiliacionPaciente';
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[12].valor		= com.common.utils.functions.getTwoSpaceValue(TRIM(refDetailCuentasMed.AC_TIPOUSUARIO));
+		
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[13].nombre	= 'EdadPaciente';
+		DECLARE bornDate CHARACTER com.common.utils.functions.getMyDateWhitFormat(TRIM(refDetailCuentasMed.AC_FECHANACIMIENTO),'yyyy-MM-dd');
+		DECLARE actualDate CHARACTER com.common.utils.functions.getMyDateWhitFormat(TRIM(refHeadFedos.DMTO_FECHAEMISION),'yyyy-MM-dd');
+		
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[13].valor		= com.common.utils.functions.getYearsByDates(bornDate,actualDate);
+		
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[14].nombre	= 'SexoPaciente';
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[14].valor		= com.common.utils.functions.getTwoSpaceValue(TRIM(refDetailCuentasMed.AC_SEXOPACIENTE));
+		
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[15].nombre	= 'EsMultipaciente';
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[15].valor		= com.common.utils.functions.getTwoSpaceValue(TRIM(refDetailCuentasMed.ESMULTIPACIENTE));
+		
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[16].nombre	= 'TipoServicio';
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[16].valor		=com.common.global.cache.getHomologation('HIS','TRANSV2','TIPO_SERVICIO',TRIM(refDetailCuentasMed.AC_TIPOSERVICIO));
+		
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[17].nombre	= 'NumeroAtencionConvenio';
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[17].valor		= com.common.utils.functions.getTwoSpaceValue(TRIM(refDetailCuentasMed.AC_NUMEROATENCIONCONVENIO));
+		
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[18].nombre	= 'CodigoMedico';
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[18].valor		= com.common.utils.functions.getTwoSpaceValue(TRIM(refDetailCuentasMed.AC_CODIGOESPECIALISTA));
+		
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[19].nombre	= 'DiasEstancia';
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[19].valor		= com.common.utils.functions.getTwoSpaceValue(TRIM(refDetailCuentasMed.AC_DIASESTANCIA));
+		
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[20].nombre	= 'DiagnosticoIngreso';
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[20].valor		= com.common.utils.functions.getTwoSpaceValue(TRIM(refDetailCuentasMed.AC_DIAGNOSTICOINGRESO));
+		
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[21].nombre	= 'DiagnosticoEgreso';
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[21].valor		= com.common.utils.functions.getTwoSpaceValue(TRIM(refDetailCuentasMed.AC_DIAGNOSTICOEGRESO));
+		
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[22].nombre	= 'SociedadMedica';
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[22].valor		= com.common.utils.functions.getTwoSpaceValue(TRIM(refDetailCuentasMed.AC_SOCIEDAD));
+		
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[23].nombre	= 'PolizaAtencion';
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[23].valor		= com.common.utils.functions.getTwoSpaceValue(TRIM(refDetailCuentasMed.AC_POLIZA));
+		
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[24].nombre	= 'PolizaAtencionAseguradora';
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[24].valor		= com.common.utils.functions.getTwoSpaceValue(TRIM(refDetailCuentasMed.AC_POLIZA));
+		
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[25].nombre	= 'NumeroHistoria';
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[25].valor		= com.common.utils.functions.getTwoSpaceValue(TRIM(refDetailCuentasMed.AC_NUMEROHISTORIA));
+		
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[26].nombre	= 'CodigoConvenio';
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[26].valor		= com.common.utils.functions.getTwoSpaceValue(TRIM(refDetailCuentasMed.AC_CONVENIO));
+		
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[27].nombre	= 'CodigoFacturador';
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[27].valor		= com.common.utils.functions.getTwoSpaceValue(TRIM(refDetailCuentasMed.CÓDIGOFACTURADOR));
+		
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[28].nombre	= 'TipoDocumentoFacturador';
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[28].valor		= com.common.global.cache.getHomologation('HIS','TRANSV2','TIPO_ID',TRIM(refDetailCuentasMed.TIPODOCUMENTOFACTURADOR));
+		
+		IF EXISTS(refDetailCuentasMed.TIPODOCUMENTOFACTURADOR[]) AND  LENGTH(TRIM(refDetailCuentasMed.TIPODOCUMENTOFACTURADOR)) > 0 THEN
+			SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[28].nombre	= 'TipoDocumentoFacturador';
+			SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[28].valor		= com.common.global.cache.getHomologation('HIS','TRANSV2','TIPO_ID',TRIM(refDetailCuentasMed.TIPODOCUMENTOFACTURADOR));	
+		ELSE
+			SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[28].nombre	= 'TipoDocumentoFacturador';
+			SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[28].valor		= '  ';
+		END IF;
+		
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[29].nombre	= 'NumeroDocumentoFacturador';
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[29].valor		= com.common.utils.functions.getTwoSpaceValue(TRIM(refDetailCuentasMed.NUMERODOCUMENTOFACTURADOR));
+		
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[30].nombre	= 'NombreFacturador';
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[30].valor		= com.common.utils.functions.getTwoSpaceValue(TRIM(refDetailCuentasMed.NOMBREFACTURADOR));
+		
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[31].nombre	= 'ApellidoFacturador';
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[31].valor		= com.common.utils.functions.getTwoSpaceValue(TRIM(refDetailCuentasMed.APELLIDOFACTURADOR));
+		
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[32].nombre	= 'Idpacienteconvenio';
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[32].valor		= com.common.utils.functions.getTwoSpaceValue(TRIM(refDetailCuentasMed.AC_IDPACIENTECONVENIO));
+		
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[33].nombre	= 'ObservacionesFactura';
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[33].valor		= com.common.utils.functions.getTwoSpaceValue(TRIM(refHeadFedos.DMTOSAFECTADOS_OBSERVACIONES));
+		
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[34].nombre	= 'TotalFacturaDolares';
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[34].valor		= com.common.utils.functions.getTwoSpaceValue(TRIM(refHeadFedos.VALORTOTALOTRADIVISA));
+		
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[35].nombre	= 'TotalFacturaDolaresMoneda';
+		SET refOut.datos.documento.(JSON.Array)informacionesAdicionales.d[35].valor		= com.common.utils.functions.getTwoSpaceValue(TRIM(refHeadFedos.VALORTOTALOTRADIVISAMONEDA));
+		
+		--Adquiriente
+		IF CONTAINS(TRIM(refHeadFedos.ADQUIRIENTE_IDENTIFICACION),'-') THEN
+			SET refOut.datos.adquiriente.identificacion							= SUBSTRING(TRIM(refHeadFedos.ADQUIRIENTE_IDENTIFICACION) BEFORE '-');	
+		ELSE
+			SET refOut.datos.adquiriente.identificacion							= TRIM(refHeadFedos.ADQUIRIENTE_IDENTIFICACION);
+		END IF;
+		
+		SET refOut.datos.adquiriente.tipoIdentificacion						= CAST(com.common.global.cache.getHomologation('HIS','TRANSV2','TIPO_ID',TRIM(refHeadFedos.ADQUIRIENTE_TIPOIDENT)) AS INTEGER);
+		IF TRIM(refHeadFedos.ADQUIRIENTE_CODIGOINTERNO) > 0 THEN
+			SET refOut.datos.adquiriente.codigoInterno							= TRIM(refHeadFedos.ADQUIRIENTE_CODIGOINTERNO);	
+		ELSE
+			SET refOut.datos.adquiriente.codigoInterno							= '0';
+		END IF;
+		
+		SET refOut.datos.adquiriente.matriculaMercantil						= CAST(TRIM(refHeadFedos.ADQUIRIENTE_MATRMERCANTIL) as INTEGER);
+		IF(LENGTH(TRIM(refHeadFedos.ADQUIRIENTE_CIIU)) > 0 AND refHeadFedos.ADQUIRIENTE_CIIU <> 0) THEN
+			SET refOut.datos.adquiriente.(JSON.Array)CIIU.d[1]				= TRIM(refHeadFedos.ADQUIRIENTE_CIIU);
+		END IF;
+		SET refOut.datos.adquiriente.razonSocial							= TRIM(refHeadFedos.ADQUIRIENTE_RAZONSOCIAL);
+		SET refOut.datos.adquiriente.nombreSucursal							= com.common.utils.functions.getTwoSpaceValue(TRIM(refHeadFedos.ADQUIRIENTE_NOMBRESUCURSAL));
+		
+		IF(LENGTH(TRIM(refHeadFedos.ADQUIRIENTE_CORREO)) > 0) THEN
+			SET refOut.datos.adquiriente.correo								= TRIM(refHeadFedos.ADQUIRIENTE_CORREO);
+		ELSEIF LENGTH(TRIM(refHeadFedos.DMTO_CONTACTOENTREGA_CORREO)) > 0 THEN
+			SET refOut.datos.adquiriente.correo								= TRIM(refHeadFedos.DMTO_CONTACTOENTREGA_CORREO);
+		ELSE
+			SET refOut.datos.adquiriente.correo								= 'adquiriente.fe@fsfb.org.co';
+		END IF;
+
+		SET refOut.datos.adquiriente.telefono								= com.common.utils.functions.getTwoSpaceValue(TRIM(refHeadFedos.ADQUIRIENTE_TELEFONO));
+		SET refOut.datos.adquiriente.sitio									= com.common.utils.functions.getTwoSpaceValue(TRIM(refHeadFedos.ADQUIRIENTE_SITIO));
+		SET refOut.datos.adquiriente.tipoRegimen							= com.common.global.cache.getHomologation('HIS','TRANSV2','TIPO_REGIMEN',TRIM(refHeadFedos.ADQUIRIENTE_TIPOREGIMEN));
+		SET refOut.datos.adquiriente.(JSON.Array)responsabilidadesRUT.d[1]	= TRIM(refHeadFedos.ADQUIRIENT_RESPONSABILIDADRUT);
+		SET refOut.datos.adquiriente.tipoPersona							= com.common.global.cache.getHomologation('HIS','TRANSV2','TIPO_PERSONA',TRIM(refHeadFedos.ADQUIRIENTE_TIPOPERSONA));
+		SET refOut.datos.adquiriente.ubicacion.pais							= TRIM(refHeadFedos.ADQUIRIENTE_UBICACION_PAIS);
+		
+		IF STARTSWITH(TRIM(refHeadFedos.ADQUIR_UBICAC_CODIGOMUNICIPIO),CODE_FILTER) THEN
+			SET refOut.datos.adquiriente.ubicacion.codigoMunicipio				= '11001';
+		ELSE
+			SET refOut.datos.adquiriente.ubicacion.codigoMunicipio				= TRIM(refHeadFedos.ADQUIR_UBICAC_CODIGOMUNICIPIO);	
+		END IF;
+		
+		SET refOut.datos.adquiriente.ubicacion.ciudad						= com.common.utils.functions.getTwoSpaceValue(TRIM(refHeadFedos.ADQUIRIENTE_UBICACION_CIUDAD));
+		SET refOut.datos.adquiriente.ubicacion.departamento					= com.common.utils.functions.getTwoSpaceValue(TRIM(refHeadFedos.ADQUIR_UBICAC_DEPARTAMENTO));
+		IF(LENGTH(TRIM(refHeadFedos.ADQUIR_UBICACION_DIRECCION)) > 0) THEN
+			SET refOut.datos.adquiriente.ubicacion.direccion						= TRIM(refHeadFedos.ADQUIR_UBICACION_DIRECCION);
+		ELSE
+			SET refOut.datos.adquiriente.ubicacion.direccion						= 'Calle 119 # 7 - 66';
+		END IF;
+		
+		--Anticipos
+		DECLARE i INTEGER 1;
+		FOR refAnticipo AS refAntaboFedos.antaboFedos[] DO
+			SET refOut.datos.(JSON.Array)anticipos.d[i].comprobante				= TRIM(refAnticipo.ANTICIPOS_COMPROBANTE);
+			SET refOut.datos.(JSON.Array)anticipos.d[i].valorAnticipo			= CAST(TRIM(refAnticipo.ANTICIPOS_VALORANTICIPO) as DECIMAL);
+			SET refOut.datos.(JSON.Array)anticipos.d[i].valorAnticipoMoneda		= TRIM(refAnticipo.ANTICIPOS_VALORANTICIPOMONEDA);
+			SET refOut.datos.(JSON.Array)anticipos.d[i].fechaPago				= com.common.utils.functions.getMyDateWhitFormat(TRIM(refAnticipo.ANTICIPOS_FECHAPAGO),'yyyy-MM-dd');
+			SET refOut.datos.(JSON.Array)anticipos.d[i].horaPago				= com.common.utils.functions.getMyHourWhitFormat(TRIM(refAnticipo.ANTICIPOS_HORAPAGO),'HH:mm:ssZZZ');
+			SET refOut.datos.(JSON.Array)anticipos.d[i].fechaProcesamientoPago	= com.common.utils.functions.getMyDateWhitFormat(TRIM(refAnticipo.ANTICIPOS_FECHAPROCEPAGO),'yyyy-MM-dd');
+			SET i = i+1;
+		END FOR;
+		
+		--Descuentos
+		SET refOut.datos.(JSON.Array)cargosDescuentos.d[1].esCargo				= com.common.utils.functions.getBooleanValue(TRIM(refHeadFedos.CARGOSDESCUENTOS_ESCARGO));
+		SET refOut.datos.(JSON.Array)cargosDescuentos.d[1].codigo				= com.common.global.cache.getHomologation('HIS','TRANSV2','DESCUENTOS',TRIM(refHeadFedos.CARGOSDESCUENTOS_CODIGO));
+		SET refOut.datos.(JSON.Array)cargosDescuentos.d[1].valorImporte			= CAST(TRIM(refHeadFedos.CARGOSDESCUENTOS_VALORIMPORTE) AS DECIMAL);
+		SET refOut.datos.(JSON.Array)cargosDescuentos.d[1].valorImporteMoneda	= TRIM(refHeadFedos.CARGOSDSCTOS_VLRIMPORTEMONEDA);
+		SET refOut.datos.(JSON.Array)cargosDescuentos.d[1].valorBase			= CAST(TRIM(refHeadFedos.CARGOSDESCUENTOS_VALORBASE) AS DECIMAL);
+		SET refOut.datos.(JSON.Array)cargosDescuentos.d[1].valorBaseMoneda		= TRIM(refHeadFedos.CARGOSDSCTOS_VALORBASEMONEDA);
+		SET refOut.datos.(JSON.Array)cargosDescuentos.d[1].porcentaje			= CAST(TRIM(refHeadFedos.CARGOSDESCUENTOS_PORCENTAJE) AS INTEGER);
+		
+		--tributos
+		SET i = 1;
+		FOR refTributo AS refTributoFedos.tributosFedos[] DO
+			SET refOut.datos.(JSON.Array)tributos.d[i].id											= TRIM(refTributo.TRIBUTOS_ID);
+			SET refOut.datos.(JSON.Array)tributos.d[i].nombre										= com.common.global.cache.getHomologation('HIS','TRANSV2','TRIBUTOS',TRIM(refTributo.TRIBUTOS_ID));
+			SET refOut.datos.(JSON.Array)tributos.d[i].esImpuesto									= com.common.utils.functions.getBooleanValue(TRIM(refTributo.TRIBUTOS_ESIMPUESTO));
+			SET refOut.datos.(JSON.Array)tributos.d[i].valorImporteTotal							= CAST(TRIM(refTributo.TRIBUTOS_VALORIMPORTETOTAL) AS DECIMAL);
+			SET refOut.datos.(JSON.Array)tributos.d[i].valorImporteTotalMoneda						= TRIM(refTributo.TRIBUTOS_VLRIMPORTETOTMONEDA);
+			SET refOut.datos.(JSON.Array)tributos.d[i].(JSON.Array)detalles.d[1].valorImporte		= CAST(TRIM(refTributo.TRIBUTOS_DETALLES_VLRIMPORTE) AS DECIMAL);
+			SET refOut.datos.(JSON.Array)tributos.d[i].(JSON.Array)detalles.d[1].valorImporteMoneda	= TRIM(refTributo.TRIBUTOS_DET_VLRIMPORTEMONEDA);
+			SET refOut.datos.(JSON.Array)tributos.d[i].(JSON.Array)detalles.d[1].valorBase			= CAST(TRIM(refTributo.TRIBUTOS_DETALLES_VALORBASE) AS DECIMAL);
+			SET refOut.datos.(JSON.Array)tributos.d[i].(JSON.Array)detalles.d[1].valorBaseMoneda	= TRIM(refTributo.TRIBUTO_DET_VALORBASEMONEDA);
+			SET refOut.datos.(JSON.Array)tributos.d[i].(JSON.Array)detalles.d[1].porcentaje			= CAST(TRIM(refTributo.TRIBUTOS_DETALLES_PORCENTAJE) AS DECIMAL);--era integer
+			SET i = i+1;
+		END FOR;
+		
+		SET refOut.datos.totales.valorBruto														= CAST(TRIM(refHeadFedos.TOTALES_VALORBRUTO) AS DECIMAL);
+		SET refOut.datos.totales.valorBrutoMoneda												= TRIM(refHeadFedos.TOTALES_VALORBRUTOMONEDA);
+		SET refOut.datos.totales.valorCargos													= CAST(TRIM(refHeadFedos.TOTALES_VALORCARGOS) AS DECIMAL);
+		SET refOut.datos.totales.valorCargosMoneda												= TRIM(refHeadFedos.TOTALES_VALORCARGOSMONEDA);
+		SET refOut.datos.totales.valorDescuentos												= CAST(TRIM(refHeadFedos.TOTALES_VALORDESCUENTOS) AS DECIMAL);
+		SET refOut.datos.totales.valorDescuentosMoneda											= TRIM(refHeadFedos.TOTALES_VALORDESCUENTOSMONEDA);
+		SET refOut.datos.totales.valorAnticipos													= CAST(TRIM(refHeadFedos.TOTALES_VALORANTICIPOS) AS DECIMAL);
+		SET refOut.datos.totales.valorAnticiposMoneda											= TRIM(refHeadFedos.TOTALES_VALORANTICIPOSMONEDA);
+		SET refOut.datos.totales.valorRedondeo													= CAST(TRIM(refHeadFedos.TOTALES_VALORREDONDEO) AS DECIMAL);
+		SET refOut.datos.totales.valorRedondeoMoneda											= TRIM(refHeadFedos.TOTALES_VALORREDONDEOMONEDA);
+		SET refOut.datos.totales.valorTotalSinImpuestos											= CAST(TRIM(refHeadFedos.TOTALES_VLRTOTSINIMPUESTOS) AS DECIMAL);
+		SET refOut.datos.totales.valorTotalSinImpuestosMoneda									= TRIM(refHeadFedos.VLRTOTALSINIMPUESTOSMONEDA);
+		SET refOut.datos.totales.valorTotalConImpuestos											= CAST(TRIM(refHeadFedos.VALORTOTALCONIMPUESTOS) AS DECIMAL);
+		SET refOut.datos.totales.valorTotalConImpuestosMoneda									= TRIM(refHeadFedos.VALORTOTALCONIMPUESTOSMONEDA);
+		SET refOut.datos.totales.valorNeto														= CAST(TRIM(refHeadFedos.TOTALES_VALORNETO) AS DECIMAL);
+		SET refOut.datos.totales.valorNetoMoneda												= TRIM(refHeadFedos.TOTALES_VALORNETOMONEDA);
+		
+		--detalle
+		SET i = 1;
+		FOR refDetalle AS refDetailFedos.detalleFedos[] DO
+			SET refOut.datos.(JSON.Array)detalles.d[i].valorCodigoInterno 									= TRIM(refDetalle.DET_VLRCODIGOINTERNO); 
+			SET refOut.datos.(JSON.Array)detalles.d[i].codigoEstandar										= CAST(CAST(TRIM(refDetalle.DET_CODIGOESTANDAR) AS DECIMAL) AS CHARACTER); 
+			SET refOut.datos.(JSON.Array)detalles.d[i].valorCodigoEstandar									= TRIM(refDetalle.DET_VLRCODIGOESTANDAR);
+			SET refOut.datos.(JSON.Array)detalles.d[i].unidadMedida											= com.common.global.cache.getHomologation('HIS','TRANSV2','UNIDAD_MEDIDA','ZZ');
+			SET refOut.datos.(JSON.Array)detalles.d[i].descripcion											= TRIM(refDetalle.DET_DESCRIPCION);
+			SET refOut.datos.(JSON.Array)detalles.d[i].unidades												= cast(UNIDADES AS INTEGER);
+			SET refOut.datos.(JSON.Array)detalles.d[i].valorUnitarioBruto									= CAST(TRIM(refDetalle.DET_VLRBRUTO) AS DECIMAL);
+			SET refOut.datos.(JSON.Array)detalles.d[i].valorUnitarioBrutoMoneda								= TRIM(refDetalle.DET_VLRUNITBRUTOMONEDA);
+			SET refOut.datos.(JSON.Array)detalles.d[i].valorBruto											= CAST(TRIM(refDetalle.DET_VLRBRUTO) AS DECIMAL);
+			SET refOut.datos.(JSON.Array)detalles.d[i].valorBrutoMoneda										= TRIM(refDetalle.DET_VLRBRUTOMONEDA);
+			SET refOut.datos.(JSON.Array)detalles.d[i].tipoDetalle											= CAST(DETALLE_TIPO AS INTEGER);
+			
+			--informaciones adicionales
+			SET refOut.datos.(JSON.Array)detalles.d[i].(JSON.Array)informacionesAdicionales.d[1].nombre		= 'Codigo';
+			SET refOut.datos.(JSON.Array)detalles.d[i].(JSON.Array)informacionesAdicionales.d[1].valor		= CAST(CAST(TRIM(refDetalle.DET_CODIGOESTANDAR) as DECIMAL) AS CHARACTER);
+			
+			SET refOut.datos.(JSON.Array)detalles.d[i].(JSON.Array)informacionesAdicionales.d[2].nombre		= 'ValorUnitarioOtraDivisa';
+			SET refOut.datos.(JSON.Array)detalles.d[i].(JSON.Array)informacionesAdicionales.d[2].valor		= CAST(CAST(TRIM(refDetalle.VLRUNITARIOOTRADIVISA) as DECIMAL) AS CHARACTER);
+			
+			SET refOut.datos.(JSON.Array)detalles.d[i].(JSON.Array)informacionesAdicionales.d[3].nombre		= 'MonedaOtraDivisa';
+			SET refOut.datos.(JSON.Array)detalles.d[i].(JSON.Array)informacionesAdicionales.d[3].valor		= TRIM(refDetalle.MONEDAOTRADIVISA);
+			
+			DECLARE j INTEGER 1;
+			FOR refSubDetalle AS refSubDetailsFedos.subDetalleFedos[] DO
+				IF refSubDetalle.CODIGO_GESTION = refDetalle.DET_VLRCODIGOINTERNO THEN
+					SET refOut.datos.(JSON.Array)detalles.d[i].(JSON.Array)subDetalles.d[j].valorCodigoInterno								= TRIM(refSubDetalle.DET_VLRCODIGOINTERNO);
+					SET refOut.datos.(JSON.Array)detalles.d[i].(JSON.Array)subDetalles.d[j].codigoEstandar									= CAST(CAST(TRIM(refSubDetalle.DET_CODIGOESTANDAR) AS INTEGER) as CHARACTER);
+					SET refOut.datos.(JSON.Array)detalles.d[i].(JSON.Array)subDetalles.d[j].valorCodigoEstandar								= TRIM(refSubDetalle.DET_VLRCODIGOESTANDAR);
+					SET refOut.datos.(JSON.Array)detalles.d[i].(JSON.Array)subDetalles.d[j].descripcion										= com.common.utils.functions.getTwoSpaceValue(TRIM(refSubDetalle.DET_DESCRIPCION));
+					SET refOut.datos.(JSON.Array)detalles.d[i].(JSON.Array)subDetalles.d[j].unidades										= CAST(TRIM(refSubDetalle.DET_UNIDADES) AS DECIMAL);
+					
+					IF LENGTH(TRIM(refSubDetalle.DET_UNIDADMEDIDA)) > 0 THEN
+						--SET refOut.datos.(JSON.Array)detalles.d[i].(JSON.Array)subDetalles.d[j].unidadMedida								= com.common.global.cache.getHomologation('HIS','TRANSV2','UNIDAD_MEDIDA',refSubDetalle.DET_UNIDADMEDIDA);
+						SET refOut.datos.(JSON.Array)detalles.d[i].(JSON.Array)subDetalles.d[j].unidadMedida								= 'ZZ';	
+					ELSE
+						SET refOut.datos.(JSON.Array)detalles.d[i].(JSON.Array)subDetalles.d[j].unidadMedida								= 'ZZ';
+					END IF;
+					
+					SET refOut.datos.(JSON.Array)detalles.d[i].(JSON.Array)subDetalles.d[j].valorUnitarioBruto								= CAST(TRIM(refSubDetalle.DET_VLRUNITARIOBRUTO) AS DECIMAL);
+					SET refOut.datos.(JSON.Array)detalles.d[i].(JSON.Array)subDetalles.d[j].valorUnitarioBrutoMoneda						= TRIM(refSubDetalle.DET_VLRUNITBRUTOMONEDA);
+					SET refOut.datos.(JSON.Array)detalles.d[i].(JSON.Array)subDetalles.d[j].valorBruto										= CAST(TRIM(refSubDetalle.DET_VLRBRUTO) AS DECIMAL);
+					SET refOut.datos.(JSON.Array)detalles.d[i].(JSON.Array)subDetalles.d[j].valorBrutoMoneda								= TRIM(refSubDetalle.DET_VLRBRUTOMONEDA);
+					SET refOut.datos.(JSON.Array)detalles.d[i].(JSON.Array)subDetalles.d[j].tipoDetalle										= CAST(SUBDETALLE_TIPO AS INTEGER);
+					
+					SET refOut.datos.(JSON.Array)detalles.d[i].(JSON.Array)subDetalles.d[j].(JSON.Array)tributos.d[1].id								= TRIM(refSubDetalle.DET_TRIBUTOS_ID);							
+					SET refOut.datos.(JSON.Array)detalles.d[i].(JSON.Array)subDetalles.d[j].(JSON.Array)tributos.d[1].esImpuesto						= com.common.utils.functions.getBooleanValue(TRIM(refSubDetalle.DET_TRIBUTOS_ESIMPUESTO));
+					SET refOut.datos.(JSON.Array)detalles.d[i].(JSON.Array)subDetalles.d[j].(JSON.Array)tributos.d[1].nombre							= com.common.global.cache.getHomologation('HIS','TRANSV2','TRIBUTOS',TRIM(refSubDetalle.DET_TRIBUTOS_ID));
+					SET refOut.datos.(JSON.Array)detalles.d[i].(JSON.Array)subDetalles.d[j].(JSON.Array)tributos.d[1].valorImporte						= CAST(TRIM(refSubDetalle.DET_TRIBUTOS_VLRIMPORTE) AS DECIMAL);
+					SET refOut.datos.(JSON.Array)detalles.d[i].(JSON.Array)subDetalles.d[j].(JSON.Array)tributos.d[1].valorImporteMoneda				= TRIM(refSubDetalle.DET_TRIBUTOS_VLRIMPORTEMON);
+					SET refOut.datos.(JSON.Array)detalles.d[i].(JSON.Array)subDetalles.d[j].(JSON.Array)tributos.d[1].valorBase							= CAST(TRIM(refSubDetalle.DET_TRIBUTOS_VLRBASE) AS DECIMAL);
+					SET refOut.datos.(JSON.Array)detalles.d[i].(JSON.Array)subDetalles.d[j].(JSON.Array)tributos.d[1].valorBaseMoneda					= TRIM(refSubDetalle.DET_TRIBUTOS_VLRBASEMONEDA);
+					SET refOut.datos.(JSON.Array)detalles.d[i].(JSON.Array)subDetalles.d[j].(JSON.Array)tributos.d[1].porcentaje						= CAST(TRIM(refSubDetalle.DETALLE_TRIBUTOS_PORCENTAJE) AS INTEGER);
+					
+					--inforación adicional
+					DECLARE m INTEGER 1;
+					FOR refHeadDetalle AS refHeadDetallesMed.headCuentasMed[] DO
+						IF refSubDetalle.NUMERFORMU = refHeadDetalle.NUMERFORMU THEN
+							SET refOut.datos.(JSON.Array)detalles.d[i].(JSON.Array)subDetalles.d[j].(JSON.Array)informacionesAdicionales.d[m].nombre			= 'FechaPrestacion';
+							SET refOut.datos.(JSON.Array)detalles.d[i].(JSON.Array)subDetalles.d[j].(JSON.Array)informacionesAdicionales.d[m].valor			= com.common.utils.functions.getMyDateWhitFormat(TRIM(refSubDetalle.FECHAPRESTACION),'yyyy-MM-dd');
+							SET m = m+1;
+							
+							SET refOut.datos.(JSON.Array)detalles.d[i].(JSON.Array)subDetalles.d[j].(JSON.Array)informacionesAdicionales.d[m].nombre			= 'TipoDocumentoPaciente';
+							SET refOut.datos.(JSON.Array)detalles.d[i].(JSON.Array)subDetalles.d[j].(JSON.Array)informacionesAdicionales.d[m].valor			= com.common.global.cache.getHomologation('HIS','TRANSV2','TIPO_ID',TRIM(refHeadDetalle.AC_TIPODOCPACIENTE));
+							SET m = m+1;
+							
+							SET refOut.datos.(JSON.Array)detalles.d[i].(JSON.Array)subDetalles.d[j].(JSON.Array)informacionesAdicionales.d[m].nombre			= 'NumeroDocumentoPaciente';
+							SET refOut.datos.(JSON.Array)detalles.d[i].(JSON.Array)subDetalles.d[j].(JSON.Array)informacionesAdicionales.d[m].valor			= com.common.utils.functions.getTwoSpaceValue(TRIM(refHeadDetalle.AC_NRODOCPACIENTE));
+							SET m = m+1;
+							
+							SET refOut.datos.(JSON.Array)detalles.d[i].(JSON.Array)subDetalles.d[j].(JSON.Array)informacionesAdicionales.d[m].nombre			= 'PrimerNombrePaciente';
+							SET refOut.datos.(JSON.Array)detalles.d[i].(JSON.Array)subDetalles.d[j].(JSON.Array)informacionesAdicionales.d[m].valor			= com.common.utils.functions.getTwoSpaceValue(TRIM(refHeadDetalle.AC_PRIMERNOMBRE));
+							SET m = m+1;
+							
+							SET refOut.datos.(JSON.Array)detalles.d[i].(JSON.Array)subDetalles.d[j].(JSON.Array)informacionesAdicionales.d[m].nombre			= 'SegundoNombrePaciente';
+							SET refOut.datos.(JSON.Array)detalles.d[i].(JSON.Array)subDetalles.d[j].(JSON.Array)informacionesAdicionales.d[m].valor			= com.common.utils.functions.getTwoSpaceValue(TRIM(refHeadDetalle.AC_SEGUNDONOMBRE));
+							SET m = m+1;
+							
+							SET refOut.datos.(JSON.Array)detalles.d[i].(JSON.Array)subDetalles.d[j].(JSON.Array)informacionesAdicionales.d[m].nombre			= 'PrimerApellidoPaciente';
+							SET refOut.datos.(JSON.Array)detalles.d[i].(JSON.Array)subDetalles.d[j].(JSON.Array)informacionesAdicionales.d[m].valor			= com.common.utils.functions.getTwoSpaceValue(TRIM(refHeadDetalle.AC_PRIMERAPELLIDO));
+							SET m = m+1;
+							
+							SET refOut.datos.(JSON.Array)detalles.d[i].(JSON.Array)subDetalles.d[j].(JSON.Array)informacionesAdicionales.d[m].nombre			= 'SegundoApellidoPaciente';
+							SET refOut.datos.(JSON.Array)detalles.d[i].(JSON.Array)subDetalles.d[j].(JSON.Array)informacionesAdicionales.d[m].valor			= com.common.utils.functions.getTwoSpaceValue(TRIM(refHeadDetalle.AC_SEGUNDOAPELLIDO));
+							SET m = m+1;
+							
+							SET refOut.datos.(JSON.Array)detalles.d[i].(JSON.Array)subDetalles.d[j].(JSON.Array)informacionesAdicionales.d[m].nombre			= 'TarifaContratada';
+							SET refOut.datos.(JSON.Array)detalles.d[i].(JSON.Array)subDetalles.d[j].(JSON.Array)informacionesAdicionales.d[m].valor			= com.common.utils.functions.getTwoSpaceValue(TRIM(refSubDetalle.TARIFACONTRATADA));
+							SET m = m+1;
+							
+							SET refOut.datos.(JSON.Array)detalles.d[i].(JSON.Array)subDetalles.d[j].(JSON.Array)informacionesAdicionales.d[m].nombre			= 'ValidarTarifaContratada';
+							SET refOut.datos.(JSON.Array)detalles.d[i].(JSON.Array)subDetalles.d[j].(JSON.Array)informacionesAdicionales.d[m].valor			= com.common.utils.functions.getTwoSpaceValue(TRIM(refSubDetalle.VALIDARTARIFACONTRATADA));
+							SET m = m+1;
+							
+							SET refOut.datos.(JSON.Array)detalles.d[i].(JSON.Array)subDetalles.d[j].(JSON.Array)informacionesAdicionales.d[m].nombre			= 'NumeroAutorizacion';
+							SET refOut.datos.(JSON.Array)detalles.d[i].(JSON.Array)subDetalles.d[j].(JSON.Array)informacionesAdicionales.d[m].valor			= com.common.utils.functions.getTwoSpaceValue(TRIM(refHeadDetalle.AC_NUMEROAUTORIZACION));
+							SET m = m+1;
+							
+							SET refOut.datos.(JSON.Array)detalles.d[i].(JSON.Array)subDetalles.d[j].(JSON.Array)informacionesAdicionales.d[m].nombre			= 'NumeroIngreso';
+							SET refOut.datos.(JSON.Array)detalles.d[i].(JSON.Array)subDetalles.d[j].(JSON.Array)informacionesAdicionales.d[m].valor			= com.common.utils.functions.getTwoSpaceValue(TRIM(refHeadDetalle.NUMERFORMU));
+							SET m = m+1;
+							
+							SET refOut.datos.(JSON.Array)detalles.d[i].(JSON.Array)subDetalles.d[j].(JSON.Array)informacionesAdicionales.d[m].nombre		= 'NumeroIngresoDAU';
+							SET refOut.datos.(JSON.Array)detalles.d[i].(JSON.Array)subDetalles.d[j].(JSON.Array)informacionesAdicionales.d[m].valor			= com.common.utils.functions.getTwoSpaceValue(TRIM(refHeadDetalle.AC_NUMEROINGRESO));
+							SET m = m+1;
+							
+							SET refOut.datos.(JSON.Array)detalles.d[i].(JSON.Array)subDetalles.d[j].(JSON.Array)informacionesAdicionales.d[m].nombre		= 'ValorUnitarioOtraDivisa';
+							SET refOut.datos.(JSON.Array)detalles.d[i].(JSON.Array)subDetalles.d[j].(JSON.Array)informacionesAdicionales.d[m].valor			= CAST(CAST(TRIM(refSubDetalle.VLRUNITARIOOTRADIVISA) AS DECIMAL) AS CHARACTER);
+							SET m = m+1;
+							
+							SET refOut.datos.(JSON.Array)detalles.d[i].(JSON.Array)subDetalles.d[j].(JSON.Array)informacionesAdicionales.d[m].nombre		= 'MonedaOtraDivisa';
+							SET refOut.datos.(JSON.Array)detalles.d[i].(JSON.Array)subDetalles.d[j].(JSON.Array)informacionesAdicionales.d[m].valor			= com.common.utils.functions.getTwoSpaceValue(TRIM(refDetalle.MONEDAOTRADIVISA));
+							SET m = m+1;
+							
+						END IF;
+					END FOR;
+					SET j = j+1;	
+				END IF;
+			END FOR;
+			
+			SET i = i+1;
+		END FOR;
+		
+				
+		/******************************************************/
+		-- Consulta de parámetros de la configuración del servicio
+		/******************************************************/
+		DECLARE encod INTEGER COALESCE(InputRoot.Properties.Encoding, InputRoot.MQMD.Encoding, DEFAULT_ENCODING);
+		DECLARE ccsid INTEGER COALESCE(InputRoot.Properties.CodedCharSetId, InputRoot.MQMD.CodedCharSetId, DEFAULT_CCSID);
+		
+		SET OutputLocalEnvironment.Destination.SOAP.Request.Transport.HTTP.WebServiceURL 	= com.common.global.cache.functions.getParameterByConfig(refMQRFH2.usr.contextTransaction.idService,INTERFACE_DATA,encod,ccsid);
+		SET OutputLocalEnvironment.Destination.SOAP.Request.Transport.HTTP.Timeout  		= com.common.global.cache.functions.getParameterByConfig(refMQRFH2.usr.contextTransaction.idService,TIMEOUT_BACKEND,encod,ccsid);
+		
+		/******************************************************/
+		-- Envío para auditoría
+		/******************************************************/
+		PROPAGATE TO TERMINAL 'out1' DELETE NONE;
+		RETURN TRUE;
+	END;
+END MODULE;
