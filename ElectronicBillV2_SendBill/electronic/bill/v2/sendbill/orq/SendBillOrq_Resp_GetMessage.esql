@@ -1,0 +1,49 @@
+BROKER SCHEMA electronic.bill.v2.sendbill.orq
+
+
+CREATE COMPUTE MODULE SendBillOrq_Resp_GetMessage
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		DECLARE refInp REFERENCE TO InputRoot.ComIbmAggregateReplyBody;
+		
+		SET OutputRoot.Properties.Encoding			= 819;
+		SET OutputRoot.Properties.CodedCharSetId	= 1208;
+		
+		SET OutputRoot.MQMD 	= refInp.AggReqConfigData.MQMD;
+		SET OutputRoot.MQRFH2 	= refInp.AggReqConfigData.MQRFH2;
+		
+		--Copiar cabeceras para gestión de error
+		----------------------------------------------------
+		DECLARE refEnv REFERENCE TO Environment;
+		DECLARE refInpRoot REFERENCE TO OutputRoot;
+		CALL common.procedures.utils.saveMQM(refInpRoot, refEnv);
+		----------------------------------------------------
+		
+		CREATE FIELD OutputRoot.XMLNSC.electronicBillV2Rq;
+		DECLARE refOut REFERENCE TO OutputRoot.XMLNSC.electronicBillV2Rq;
+		
+		FOR refData AS refInp.*[] DO
+			DECLARE nm CHARACTER SUBSTRING(FIELDNAME(refData) AFTER 'Agg');
+			IF NOT CONTAINS(nm, 'ConfigData') THEN
+				MOVE refData LASTCHILD;
+				MOVE refData LASTCHILD;
+				
+				DECLARE tmp CHARACTER FIELDNAME(refData);
+				IF refData.Status.Code = 'T' THEN
+					SET refOut.{UPPER(nm)} = refData;
+				ELSE
+					THROW USER EXCEPTION CATALOG 'ElectronicBillV2' MESSAGE 7001 VALUES ('Tabla vacía: ',FIELDNAME(refData));
+				END IF;
+			ELSE
+				MOVE refData LASTCHILD;
+				MOVE refData LASTCHILD;
+				MOVE refData LASTCHILD;
+				
+				SET OutputRoot.MQRFH2.usr.event_name = refData.ACP_EVENTNAME;
+				 
+			END IF;
+		END FOR;
+		
+		RETURN TRUE;
+	END;
+END MODULE;

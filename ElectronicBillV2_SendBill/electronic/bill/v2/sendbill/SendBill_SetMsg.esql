@@ -1,0 +1,32 @@
+BROKER SCHEMA electronic.bill.v2.sendbill
+
+DECLARE DEFAULT_ENCODING CONSTANT INTEGER 1252;
+DECLARE DEFAULT_CCSID CONSTANT INTEGER 1209;
+
+DECLARE MAPPING_AUDIT CONSTANT CHARACTER 'AUDIT_MSG';
+
+CREATE COMPUTE MODULE SendBill_SetMsg
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		DECLARE key CHARACTER UUIDASCHAR ||'-logs';
+		
+		SET OutputRoot.MQMD 						= InputRoot.MQMD;
+		SET OutputRoot.MQRFH2 						= InputRoot.MQRFH2;
+		SET OutputRoot.MQRFH2.usr.log.cacheKey		= key;
+		SET OutputRoot.MQRFH2.usr.log.cacheMapping	= MAPPING_AUDIT;
+		
+		DECLARE refMessage REFERENCE TO InputRoot.JSON; 
+		
+		/****************************************************************/
+		DECLARE encod INTEGER DEFAULT_ENCODING;
+		DECLARE ccsid INTEGER DEFAULT_CCSID;
+		
+		DECLARE data ROW;
+		DECLARE refData REFERENCE  TO data;
+		
+		CALL com.common.utils.procedures.parseMessage(refMessage.Data.data,encod,ccsid,refData);
+		DECLARE tmp CHARACTER com.common.global.cache.putGlobalCache(key,refData.message,MAPPING_AUDIT);
+		
+		RETURN TRUE;
+	END;
+END MODULE;
