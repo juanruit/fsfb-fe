@@ -1,0 +1,247 @@
+BROKER SCHEMA com.common.utils.functions
+/*
+Función que devuelve la fecha en formato yyyyMMddHHmmssSS
+*/
+CREATE FUNCTION getDateRegisterOracle()RETURNS CHARACTER
+BEGIN
+    RETURN CAST(CURRENT_TIMESTAMP AS CHARACTER FORMAT 'yyyyMMddHHmmssSS');
+END;
+
+/*
+Función que quita espacios en blanco a un string, se usa para los nodos mapping.
+*/
+CREATE FUNCTION trimString(IN data CHARACTER)RETURNS CHARACTER
+BEGIN
+    RETURN TRIM(data);
+END;
+
+/*
+Función que devuelve una cadena de caracteres de un longitud dada, con ceros a la izquierda
+myLength : Tamaño de la cadena a devolver
+paddChar : Carácter de relleno
+data     : Dato original
+*/
+CREATE FUNCTION getDataOverlayCero(IN myLength INTEGER, IN paddChar CHARACTER, IN data CHARACTER)RETURNS CHARACTER
+BEGIN
+    RETURN OVERLAY(REPLICATE(paddChar,myLength) PLACING  data FROM (myLength - LENGTH(data)) FOR (LENGTH(data)+1));
+END;
+
+/*
+Función que devuelve un timestamp del sistema en el formato desdeado.
+*/
+CREATE FUNCTION getDateWhitFormat(IN myFormat CHARACTER)RETURNS CHARACTER
+BEGIN
+    RETURN CAST(CURRENT_TIMESTAMP AS CHARACTER FORMAT myFormat);
+END;
+
+/*
+Función que devuelv boolean , dado un valor entero
+*/
+CREATE FUNCTION getBooleanValue(IN myValue CHARACTER)RETURNS BOOLEAN
+BEGIN
+    IF myValue = '1' THEN
+    	return true;
+    ELSE
+    	return false;
+    END IF;
+END;
+
+
+/*
+Función que devuelv doble espacio en blanco
+*/
+CREATE FUNCTION getTwoSpaceValue(IN myValue CHARACTER)RETURNS CHARACTER
+BEGIN
+    IF LENGTH(myValue) = 0 THEN
+    	return '  ';
+    ELSE
+    	return myValue;
+    END IF;
+END;
+
+
+/*
+Función que devuelve un fecha ingresada en el formato desdeado.
+*/
+CREATE FUNCTION getMyDateWhitFormat(IN myDate CHARACTER, IN myFormat CHARACTER)RETURNS CHARACTER
+BEGIN
+	DECLARE dateStr CHARACTER '';
+	DECLARE timeStr CHARACTER '';
+	
+    IF(LENGTH(myDate) > 0) THEN
+    	IF(CONTAINS(myDate,'T')) THEN
+    		SET dateStr = SUBSTRING(myDate BEFORE 'T');
+	    	SET timeStr = SUBSTRING(myDate AFTER 'T');
+		ELSEIF(CONTAINS(myDate,' ')) THEN
+			SET dateStr = SUBSTRING(myDate BEFORE ' ');
+		    SET timeStr = SUBSTRING(myDate AFTER ' ');
+		ELSE
+			SET dateStr = myDate;
+			SET timeStr = '00:00:00';
+		END IF;
+		
+    	SET dateStr 		= REPLACE(dateStr, '/','-');
+	    DECLARE Mytimestamp CHARACTER dateStr ||' '||timeStr;
+	    DECLARE dateTime 	TIMESTAMP CAST(Mytimestamp AS TIMESTAMP);
+	    RETURN CAST(dateTime AS CHARACTER FORMAT myFormat);
+	ELSE
+		RETURN getDateWhitFormat(myFormat);
+	END IF;
+END;
+
+CREATE FUNCTION getPlaneDate(IN myDate CHARACTER)RETURNS CHARACTER
+BEGIN
+	DECLARE dateStr CHARACTER '';
+	IF(LENGTH(myDate) > 0) THEN
+    	SET dateStr 		= REPLACE(myDate, ' ','');
+    	SET dateStr 		= REPLACE(dateStr, ':','');
+    	SET dateStr 		= REPLACE(dateStr, '.','');
+	    
+	    RETURN dateStr;
+	ELSE
+		RETURN getDateWhitFormat('yyyyMMddHHmmss');
+	END IF;
+END;
+
+/*
+Función que devuelve la edad de una persona, dada dos fechas.
+*/
+CREATE FUNCTION getYearsByDates(IN myBornDate CHARACTER, IN myActualDate CHARACTER)RETURNS CHARACTER
+BEGIN
+	DECLARE bornDate DATE CAST(myBornDate AS DATE);
+	DECLARE actualDate DATE CAST(myActualDate AS DATE);
+	
+	DECLARE yearInterval INTERVAL (actualDate - bornDate)YEAR;
+	DECLARE years INTEGER cast(yearInterval AS INTEGER); 
+	return CAST(years AS CHARACTER);
+END;
+
+
+
+CREATE FUNCTION getDateOraByJSON_yyyymmdd(IN myDate CHARACTER)RETURNS CHARACTER
+BEGIN
+	DECLARE dateStr CHARACTER '';
+
+	SET dateStr 		= SUBSTRING(myDate FROM 7) || '-' ||SUBSTRING(myDate FROM 4 FOR 2) || '-' || SUBSTRING(myDate FROM 1 FOR 2);
+	RETURN dateStr;
+END;
+
+CREATE FUNCTION getDateOraByJSON_ddmmyyyy(IN myDate CHARACTER)RETURNS CHARACTER
+BEGIN
+	DECLARE dateStr CHARACTER '';
+
+	SET dateStr 		= SUBSTRING(myDate FROM 9 FOR 2) || '-' ||SUBSTRING(myDate FROM 6 FOR 2) || '-' || SUBSTRING(myDate FROM 1 FOR 4);
+	RETURN dateStr;
+END;
+
+
+/*
+Función que devuelve un fecha ingresada en el formato desdeado.
+*/
+CREATE FUNCTION getMyHourWhitFormat(IN myHour CHARACTER, IN myFormat CHARACTER)RETURNS CHARACTER
+BEGIN
+	DECLARE timeStr CHARACTER CAST(CURRENT_TIME as CHARACTER FORMAT myFormat);
+	
+    IF(LENGTH(myHour) > 0) THEN
+    	SET myHour = OVERLAY(timeStr PLACING myHour FROM 1 FOR 8);
+    	RETURN myHour;
+	ELSE
+		RETURN CAST(CURRENT_TIMESTAMP AS CHARACTER FORMAT myFormat);
+	END IF;
+END;
+
+
+/*
+Función que devuelve un valor ofuscado, dado un nombre de método y un valor a ofuscar
+*/
+CREATE FUNCTION getMaskByMethod(IN method CHARACTER, IN valueMask CHARACTER)RETURNS CHARACTER
+BEGIN
+    DECLARE total INTEGER LENGTH(valueMask);
+    DECLARE strLeft, strRight CHARACTER '';
+    IF method = 'LastFour' THEN
+        --SET valueMask = LEFT(valueMask,6)||REPLICATE('*',total-4) ||RIGHT(valueMask,4);
+        SET valueMask = LEFT(valueMask,(total-4))||REPLICATE('*',4);
+    ELSEIF method = 'All' THEN
+        SET valueMask = REPLICATE('*',total);
+    ELSEIF method = 'Track2' THEN
+        SET strLeft = SUBSTRING(valueMask BEFORE '=');
+        SET strRight = SUBSTRING(valueMask AFTER '=');
+        SET total = LENGTH(strLeft);
+        SET valueMask = LEFT(valueMask,6)||REPLICATE('*',total-10) ||RIGHT(valueMask,4)||'='||LEFT(valueMask,4)||REPLICATE('*',LENGTH(strRight)-4);
+    END IF;
+    
+    RETURN valueMask; 
+  END;
+
+/*
+Función que devuelve el nombre del área funcional dado un sistema y/o tipo de mensajería
+*/
+CREATE FUNCTION getCategory(IN system CHARACTER, IN messageType CHARACTER)RETURNS CHARACTER
+BEGIN
+	DECLARE category CHARACTER '';
+	
+	CASE
+	WHEN (system = 'MUSE' OR system = 'GEC') AND messageType = 'ADT' THEN
+		SET category = 'CARDIOLOGY';
+	WHEN system = 'ALR' AND messageType = 'ADT' THEN
+		SET category = 'PHARMACY';
+	WHEN system = 'GTW' AND messageType = 'ADT' THEN
+		SET category = 'VITALSIGNS';
+	WHEN system = '' AND messageType = '' THEN
+		SET category = '';
+	END CASE;
+	
+	RETURN category; 
+END; 
+  
+CREATE FUNCTION pad(IN source CHARACTER, IN lenght INTEGER, IN paddingChar CHARACTER, IN side CHARACTER) RETURNS CHARACTER 
+BEGIN
+
+	DECLARE result			CHARACTER source;
+	DECLARE sourceLenght 	INTEGER LENGTH(source);
+
+	IF side = 'LEFT' THEN
+		IF sourceLenght < lenght THEN
+			SET result = REPLICATE(paddingChar,(lenght-sourceLenght)) || result;
+		ELSEIF sourceLenght > lenght THEN
+			SET result = RIGHT(result,lenght);
+		END IF;
+	ELSEIF side = 'RIGHT' THEN
+		IF sourceLenght < lenght THEN
+			SET result = result || REPLICATE(paddingChar,(lenght-sourceLenght));
+		ELSEIF sourceLenght > lenght THEN
+			SET result = LEFT(result,lenght);
+		END IF;
+	END IF;	 
+		
+	RETURN result;    
+END; 
+
+CREATE FUNCTION identifierCode(IN source CHARACTER) RETURNS CHARACTER
+BEGIN
+	CASE source
+		WHEN 'BR' THEN 
+			RETURN '2';
+		WHEN 'PI' THEN 
+			RETURN '3';
+		WHEN 'PN' THEN 
+			RETURN '4';
+		WHEN 'VS' THEN 
+			RETURN '5';
+		WHEN 'XX' THEN 
+			RETURN '6';
+	    WHEN 'AN' THEN 
+			RETURN 'M';
+	   WHEN 'DS' THEN 
+			RETURN 'P';
+	   WHEN 'DL' THEN 
+			RETURN 'A';
+	   WHEN 'UPIN' THEN 
+			RETURN 'N';											
+		
+	END CASE;
+END;
+CREATE FUNCTION getUUID()RETURNS CHARACTER
+BEGIN
+	RETURN UUIDASCHAR;
+END;

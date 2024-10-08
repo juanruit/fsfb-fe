@@ -1,0 +1,23 @@
+BROKER SCHEMA common.modules.adapters.db
+
+
+CREATE COMPUTE MODULE CmpSetStateMessage
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		SET OutputRoot.MQMD 	= InputRoot.MQMD;
+		SET OutputRoot.MQRFH2 	= InputRoot.MQRFH2;
+		
+		--Copiar identificador de base de datos para actualizar estado.
+		SET OutputRoot.MQRFH2.usr.response.DB.identifier						= InputRoot.MQRFH2.usr.contextTransaction.identifier;
+		
+		CREATE FIELD OutputRoot.XMLNSC.ControlMessageResp;
+		DECLARE refOut REFERENCE TO OutputRoot.XMLNSC.ControlMessageResp;
+		
+		SET refOut.ContextTransaction.CodeTransaction 	= 'P';
+		SET refOut.ContextTransaction.DescTransaction 	= 'Procesando';
+		SET refOut.ContextTransaction.Identificador		= 'NA';
+		
+		RETURN TRUE;
+	END;
+END MODULE;
+	

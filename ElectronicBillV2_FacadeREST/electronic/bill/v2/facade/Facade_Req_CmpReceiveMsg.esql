@@ -1,0 +1,77 @@
+BROKER SCHEMA electronic.bill.v2.facade
+
+DECLARE REQUEST_NMELEMENT CONSTANT CHARACTER	'Req';
+DECLARE RESPONSE_NMELEMENT CONSTANT CHARACTER	'Resp';
+
+DECLARE FACADE_RQ_TRACE CONSTANT INTEGER 1;
+DECLARE NM_COMPONENT CONSTANT CHARACTER 'ELECTRONICBILL.V2.FCD.REST';
+DECLARE PREFIX_QUEUE CONSTANT CHARACTER 'MQINP.';
+DECLARE SUFIX_QUEUE CONSTANT CHARACTER '.REQ';
+DECLARE APPLICATION CONSTANT CHARACTER 'ELECTRONICBILL.V2';
+
+CREATE COMPUTE MODULE Facade_Req_CmpReceiveMsg
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		--Crear cabeceras de mensaje
+		CREATE FIELD OutputRoot.Properties;
+		CREATE FIELD OutputRoot.MQMD;
+		CREATE FIELD OutputRoot.MQRFH2;
+
+		--Eliminar cabeceras HHPT para envío de mensajes a MQ
+		SET OutputRoot.HTTPInputHeader = NULL;
+
+		--Copia de mensaje recibido desde cliente
+		SET OutputRoot.JSON = InputRoot.JSON;
+		IF EXISTS(OutputRoot.JSON.Data.factura.advertencias.Item[]) THEN
+			FOR itemAdver AS OutputRoot.JSON.Data.factura.advertencias.Item[] DO
+				DECLARE msmTemp CHARACTER itemAdver.mensaje;
+				SET msmTemp = REPLACE(itemAdver.mensaje,'“','');
+				SET msmTemp = REPLACE(msmTemp,'”','');
+				SET itemAdver.mensaje = COALESCE(msmTemp,itemAdver.mensaje); 
+			END FOR;
+		END IF;
+
+		--Crear referencia a objeto de entrada.
+		--DECLARE refInp REFERENCE TO InputRoot.JSON;
+		--MOVE refInp LASTCHILD;
+		--MOVE refInp LASTCHILD;
+
+		--Guardar nombre de elementos de respuesta en caso de falla.
+		SET OutputRoot.MQRFH2.usr.response.WS.nmNode	= 'ValidateResp';
+
+		--Crear referencia a Environment
+		DECLARE refEnv REFERENCE TO Environment;
+
+		--Guardar datos en cabecera para auditoría
+		SET OutputRoot.MQRFH2.usr.contextTransaction.ApiName		= NM_COMPONENT;
+		SET OutputRoot.MQRFH2.usr.contextTransaction.Operation		= UCASE(SUBSTRING(InputLocalEnvironment.HTTP.Input.Path.Segment[3] FROM 1 FOR 1)) || SUBSTRING(InputLocalEnvironment.HTTP.Input.Path.Segment[3] FROM 2);
+		SET OutputRoot.MQRFH2.usr.contextTransaction.Interface		= 'DB_HIS';
+		
+		SET OutputRoot.MQRFH2.usr.contextTransaction.idService		= APPLICATION || '.' || UCASE(OutputRoot.MQRFH2.usr.contextTransaction.Operation) || OutputRoot.MQRFH2.usr.contextTransaction.Interface;
+		SET OutputRoot.MQRFH2.usr.log.component						= NM_COMPONENT || '.Fcd';
+		SET OutputRoot.MQRFH2.usr.log.idLog 						= FACADE_RQ_TRACE;
+		SET OutputRoot.MQRFH2.usr.log.transactionDate 				= com.common.utils.functions.getDateRegisterOracle();
+		SET OutputRoot.MQRFH2.usr.log.ipClient 						= SUBSTRING(InputRoot.HTTPInputHeader.Host BEFORE ':');
+
+		--Setear el tipo de mensaje esperado en la respuesta
+		SET OutputRoot.MQRFH2.usr.response.formatType				= 'REST';
+
+		--Nombre de componente de entrada, se tiene en cuenta para registro de logs tipo 4. Respuesta al cliente.
+		SET OutputRoot.MQRFH2.usr.response.nmFcd					= NM_COMPONENT;
+		
+		--Tomar identificador de cliente.
+		SET OutputRoot.MQRFH2.usr.response.WS.replyIdentifier		= InputLocalEnvironment.Destination.HTTP.RequestIdentifier;
+
+		--Salvar datos de respuesta
+		SET Environment.Variables.usr								= OutputRoot.MQRFH2.usr;
+
+		--Poner nombre de cola destino.
+		SET OutputLocalEnvironment.Destination.MQ.DestinationData[1].queueName 	=  PREFIX_QUEUE || UPPER(REPLACE(OutputRoot.MQRFH2.usr.contextTransaction.idService,'_','.')) || SUFIX_QUEUE;
+
+		--Propaga mensaje de auditoría
+		PROPAGATE TO TERMINAL 'out1' DELETE NONE;
+
+		--Propaga mensaje a componente específico
+		RETURN TRUE;
+	END;
+END MODULE;

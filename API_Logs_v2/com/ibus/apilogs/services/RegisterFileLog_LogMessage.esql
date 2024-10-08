@@ -1,0 +1,43 @@
+BROKER SCHEMA com.ibus.apilogs.services
+
+
+CREATE COMPUTE MODULE RegisterFileLog_LogMessage
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		SET OutputRoot.Properties.Encoding 			= 856;
+		SET OutputRoot.Properties.CodedCharSetId	= 437;
+		
+		DECLARE refInp REFERENCE TO InputRoot;
+		MOVE refInp LASTCHILD;
+		--MOVE refInp LASTCHILD;
+		
+		DECLARE refMQRFH2 REFERENCE TO InputRoot.MQRFH2.usr;
+		
+		DECLARE msgAudit CHARACTER '';
+	
+		SET OutputRoot.XMLNSC 					= NULL;
+		SET msgAudit = msgAudit || 'Component:		' || refMQRFH2.log.component || '
+';
+		SET msgAudit = msgAudit || 'IdLog:			' || refMQRFH2.log.idLog || '
+';
+		SET msgAudit = msgAudit || 'IdTransaction:	' || refMQRFH2.contextTransaction.IdTransaction || '
+';
+		SET msgAudit = msgAudit || 'Fecha:			' || CAST(CURRENT_TIMESTAMP AS CHARACTER FORMAT 'YYYYmmdd HH:mm:ss:SS') || '
+';
+		
+		
+		DECLARE encod INTEGER COALESCE(InputRoot.Properties.Encoding, InputRoot.MQMD.Encoding, DEFAULT_ENCODING);
+		DECLARE ccsid INTEGER COALESCE(InputRoot.Properties.CodedCharSetId, InputRoot.MQMD.CodedCharSetId, DEFAULT_CCSID);
+		CALL com.common.utils.procedures.parseMessage(refInp,encod,ccsid,refMQRFH2);
+		SET msgAudit = msgAudit || 'Mensaje:		' || refMQRFH2.message || '
+';
+	
+		SET msgAudit = msgAudit || '******************************************************************************************************** ' || '
+';
+		SET OutputRoot.BLOB.BLOB = CAST(msgAudit AS BLOB CCSID 1209);
+		PROPAGATE TO TERMINAL 'out2' DELETE NONE;
+		
+		
+		RETURN FALSE;
+	END;
+END MODULE;

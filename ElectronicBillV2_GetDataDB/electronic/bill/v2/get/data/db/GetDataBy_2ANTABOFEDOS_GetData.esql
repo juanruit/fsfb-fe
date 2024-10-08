@@ -1,0 +1,80 @@
+BROKER SCHEMA electronic.bill.v2.get.data.db
+
+
+CREATE COMPUTE MODULE GetDataBy_2ANTABOFEDOS_GetData
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		SET OutputRoot.Properties.Encoding			= 819;
+		SET OutputRoot.Properties.CodedCharSetId	= 273;
+		
+		SET OutputRoot.MQMD.MsgId 		= InputRoot.MQMD.MsgId;
+		SET OutputRoot.MQMD.CorrelId 	= InputRoot.MQMD.CorrelId;
+		SET OutputRoot.MQMD.ReplyToQ	= InputRoot.MQMD.ReplyToQ;
+		SET OutputRoot.MQRFH2 			= InputRoot.MQRFH2;
+		
+		/******************************************************/
+		-- Declarar referencias
+		/******************************************************/
+		DECLARE refEnv REFERENCE TO Environment;
+		DECLARE refMQRFH2 REFERENCE TO OutputRoot.MQRFH2;
+		DECLARE refInpRoot REFERENCE TO OutputRoot;
+		
+		/******************************************************/
+		-- Setear información para auditoría y headers
+		/******************************************************/
+		CALL common.procedures.utils.saveMQM(refInpRoot, refEnv);
+		
+		DECLARE refInp REFERENCE TO InputRoot.XMLNSC;
+		MOVE refInp LASTCHILD;
+		MOVE refInp LASTCHILD;
+		
+		DECLARE sql CHARACTER '';
+		CREATE FIELD OutputRoot.XMLNSC.AntaboFedosRs;
+		DECLARE refOut REFERENCE TO OutputRoot.XMLNSC.AntaboFedosRs;
+		
+		-- se agrega campo a la consulta de anticipos (COD_SISPRO) 17/09/2024
+		
+		SET sql = 'select ANTABOFEDOS.ANTICIPOS_COMPROBANTE         ,
+			ANTABOFEDOS.COD_SISPRO			          ,
+			ANTABOFEDOS.ANTICIPOS_VALORANTICIPO       ,
+			ANTABOFEDOS.ANTICIPOS_VALORANTICIPOMONEDA ,
+			ANTABOFEDOS.ANTICIPOS_FECHAPAGO           ,
+			ANTABOFEDOS.ANTICIPOS_HORAPAGO            ,
+			ANTABOFEDOS.ANTICIPOS_FECHAPROCEPAGO	  ,       
+			ANTABOFEDOS.ANTICIPOS_DESCRP  			  ,
+			ANTABOFEDOS.NUMERFORMU       
+			from  ADMSALUD.ANTABOFEDOS where FCT_ID= ? and FCT_IDD= ?
+			and ANTICIPOS_VALORANTICIPO <> 0 
+			ORDER BY ANTICIPOS_VALORANTICIPO DESC';
+		
+		/*******************************************************************************************/
+		DECLARE refResult REFERENCE TO Environment.Variables.result;
+		CREATE LASTCHILD OF refResult DOMAIN 'XMLNSC' NAME 'XMLNSC';
+		MOVE refResult TO refResult.XMLNSC;
+		SET refResult.result.antaboFedos[] =  PASSTHRU(sql,refInp.FCT_ID,refInp.FCTIDD);			 
+		
+		DECLARE data ROW;
+		DECLARE refData REFERENCE  TO data;
+		
+		IF CARDINALITY(refResult.result.antaboFedos[]) >= 0 THEN
+			CALL com.common.utils.procedures.parseMessage(refResult,DEFAULT_ENCODING,DEFAULT_CCSID,refData);
+			--DECLARE key CHARACTER CAST(refInp.FCT_ID AS CHARACTER)||CAST(refInp.FCTIDD AS CHARACTER)||'ANTABOFEDOS';
+			DECLARE key CHARACTER UUIDASCHAR;
+			DECLARE tmp CHARACTER com.common.global.cache.putGlobalCache(key,refData.message,HOMOLOGATION_MAPPING);
+			
+			--Creación del mensaje de error de fachada
+			SET refOut.ContextTransaction.IdTransaction 		= COALESCE(refMQRFH2.usr.contextTransaction.IdTransaction,'00000');
+			SET refOut.Status.Code								= 'T';
+			SET refOut.Status.Desc								= 'Transacción exitosa';
+			SET refOut.Status.Cache.Id							= key;
+			SET refOut.Status.Cache.NmCache						= HOMOLOGATION_MAPPING;		
+		ELSE
+			--Creación del mensaje de error de fachada
+			SET refOut.ContextTransaction.IdTransaction 		= COALESCE(refMQRFH2.usr.contextTransaction.IdTransaction,'00000');
+			SET refOut.Status.Code								= 'E';
+			SET refOut.Status.Desc								= 'Transacción no exitosa';
+		END IF;
+		
+		RETURN TRUE;
+	END;
+END MODULE;

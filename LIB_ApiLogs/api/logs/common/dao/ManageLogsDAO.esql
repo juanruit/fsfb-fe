@@ -1,0 +1,51 @@
+BROKER SCHEMA api.logs.common.dao
+
+DECLARE PENDING_TRANSACTION CONSTANT CHARACTER 'PT';
+DECLARE DESC_PENDING CONSTANT CHARACTER 'Transacción en proceso';
+
+
+/*
+Inserta registro en tabla maestro
+*/
+CREATE PROCEDURE insertLogTransaction(IN refConfig REFERENCE) BEGIN
+	DECLARE dateRegister CHARACTER com.common.utils.functions.getPlaneDate(refConfig.log.transactionDate);
+	
+	DECLARE nextVal ROW;
+	SET nextVal.ID[] = PASSTHRU('SELECT USR_BUSIBM.LOG_TRANSACTION_SEQ.NEXTVAL FROM DUAL');
+	DECLARE logId DECIMAL CAST(nextVal.ID.NEXTVAL AS FLOAT);
+	
+	DECLARE sql CHARACTER 'INSERT INTO USR_BUSIBM.LOG_TRANSACTION(PK_ID_LOG_TRANSACTION, FK_ID_SERVICE,ID_TRANSACTION,INIT_DATE,END_DATE,STATE_TRANSACTION,DESC_TRANSACTION) VALUES (?,?,?,?,?,?,?)';
+	PASSTHRU(sql,logId,refConfig.contextTransaction.idService,refConfig.contextTransaction.IdTransaction,CAST(dateRegister AS CHARACTER),(dateRegister),PENDING_TRANSACTION,DESC_PENDING);
+END;
+
+CREATE PROCEDURE updateLogTransaction(INOUT refConfig REFERENCE) BEGIN
+	DECLARE dateRegister CHARACTER com.common.utils.functions.getPlaneDate(refConfig.log.transactionDate);
+	
+	DECLARE sql CHARACTER 'UPDATE USR_BUSIBM.LOG_TRANSACTION SET END_DATE = ?, STATE_TRANSACTION = ?, DESC_TRANSACTION = ? WHERE FK_ID_SERVICE = ? AND ID_TRANSACTION = ? ';
+	PASSTHRU(sql,CAST(dateRegister AS CHARACTER),refConfig.log.stateTransaction,COALESCE(SUBSTRING(refConfig.log.descTransaction FROM 1 FOR 200), 'No definido'),refConfig.contextTransaction.idService,refConfig.contextTransaction.IdTransaction);
+END;
+
+CREATE PROCEDURE insertLogTransactionDetailMsgDirect(INOUT refConfig REFERENCE) BEGIN
+	DECLARE dateRegister CHARACTER com.common.utils.functions.getPlaneDate(refConfig.log.transactionDate);
+	
+	DECLARE nextVal ROW;
+	SET nextVal.ID[] = PASSTHRU('SELECT USR_BUSIBM.LOG_TRANSACTION_DETAIL_SEQ.NEXTVAL FROM DUAL');
+	DECLARE logId DECIMAL CAST(nextVal.ID.NEXTVAL AS FLOAT);
+	
+	DECLARE sql CHARACTER 'INSERT INTO USR_BUSIBM.LOG_TRANSACTION_DETAIL(PK_ID_LOG_TRANSACTION_DETAIL,FK_ID_SERVICE,FK_ID_TRANSACTION,DATE_MESSAGE,TYPE_LOG,MESSAGE,COMPONENT) VALUES (?,?,?,?,?,?,?)';
+	PASSTHRU(sql,logId,refConfig.contextTransaction.idService, refConfig.contextTransaction.IdTransaction,CAST(dateRegister AS CHARACTER),refConfig.log.idLog,refConfig.message,refConfig.log.component);
+END;
+
+CREATE PROCEDURE insertLogTransactionDetail(INOUT refConfig REFERENCE) BEGIN
+	DECLARE dateRegister CHARACTER com.common.utils.functions.getPlaneDate(refConfig.log.transactionDate);
+	
+	--DECLARE message BLOB CAST(refConfig.message AS BLOB CCSID 819);
+	DECLARE message BLOB CAST(refConfig.message AS BLOB CCSID 1252);
+	
+	DECLARE nextVal ROW;
+	SET nextVal.ID[] = PASSTHRU('SELECT USR_BUSIBM.LOG_TRANSACTION_DETAIL_SEQ.NEXTVAL FROM DUAL');
+	DECLARE logId DECIMAL CAST(nextVal.ID.NEXTVAL AS FLOAT);
+	
+	DECLARE sql CHARACTER 'INSERT INTO USR_BUSIBM.LOG_TRANSACTION_DETAIL(PK_ID_LOG_TRANSACTION_DETAIL, FK_ID_SERVICE,FK_ID_TRANSACTION,DATE_MESSAGE,TYPE_LOG,MESSAGE,COMPONENT) VALUES (?,?,?,?,?,?,?)';
+	PASSTHRU(sql,logId,refConfig.contextTransaction.idService, refConfig.contextTransaction.IdTransaction,CAST(dateRegister AS CHARACTER),refConfig.log.idLog,message,refConfig.log.component);
+END;

@@ -1,0 +1,24 @@
+BROKER SCHEMA electronic.bill.db.adapter
+
+
+CREATE COMPUTE MODULE GetDataDb_Resp_CmpUpdateState
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		/******************************************************/
+		-- Declarar referencias
+		/******************************************************/
+		DECLARE refMQRFH2 REFERENCE TO InputRoot.MQRFH2;
+		DECLARE refInp REFERENCE TO InputRoot.XMLNSC;
+		MOVE refInp LASTCHILD;
+		
+		DECLARE sql CHARACTER 'UPDATE ADMSALUD.RESPONSECTRLBUS SET FCT_STATUS = ?, FCT_RESPTRANSACCION = ?, FCT_IDENT = ?  WHERE FCTIDD = ? AND FCT_ID = ?';
+		PASSTHRU(sql,
+		refInp.ContextTransaction.CodeTransaction,
+		SUBSTRING(refInp.ContextTransaction.DescTransaction FROM (LENGTH(refInp.ContextTransaction.DescTransaction)-200)),
+		COALESCE(refInp.ContextTransaction.Identificador,' '),
+		refMQRFH2.usr.response.DB.fct_idd, 
+		refMQRFH2.usr.response.DB.fct_id);
+				
+		RETURN FALSE;
+	END;
+END MODULE;

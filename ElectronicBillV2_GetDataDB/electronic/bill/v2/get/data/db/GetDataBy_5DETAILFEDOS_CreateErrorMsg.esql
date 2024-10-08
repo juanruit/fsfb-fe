@@ -1,0 +1,29 @@
+BROKER SCHEMA electronic.bill.v2.get.data.db
+
+
+CREATE COMPUTE MODULE GetDataBy_5DETAILFEDOS_CreateErrorMsg
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+			--Copiar cabeceras
+		SET OutputRoot.MQMD.MsgId 		= InputRoot.MQMD.MsgId;
+		SET OutputRoot.MQMD.CorrelId 	= InputRoot.MQMD.CorrelId;
+		SET OutputRoot.MQMD.ReplyToQ 	= InputRoot.MQMD.ReplyToQ;
+		SET OutputRoot.MQRFH2 			= InputRoot.MQRFH2;
+		
+		--Declare referencia Datos de respuesta
+		DECLARE refMQRFH2 REFERENCE TO InputRoot.MQRFH2;
+		
+	    /******************************************************/
+		-- Creación mensaje de respuesta
+		/******************************************************/
+		CREATE FIELD OutputRoot.XMLNSC.DetailFedosRs;
+		DECLARE refOut REFERENCE TO OutputRoot.XMLNSC.DetailFedosRs;
+		
+		--Creación del mensaje de error de fachada
+		SET refOut.ContextTransaction.IdTransaction 		= COALESCE(refMQRFH2.usr.contextTransaction.IdTransaction,'00000');
+		SET refOut.Status.Code								= 'E';
+		SET refOut.Status.Desc								= 'No exitosa';
+		
+		RETURN TRUE;
+	END;
+END MODULE;

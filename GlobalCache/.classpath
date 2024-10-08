@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<classpath>
+	<classpathentry kind="src" path="src"/>
+	<classpathentry exported="true" kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER/org.eclipse.jdt.internal.debug.ui.launcher.StandardVMType/JavaSE-1.7"/>
+	<classpathentry exported="true" kind="con" path="org.eclipse.jdt.USER_LIBRARY/GlobalCacheIBUS"/>
+	<classpathentry exported="true" kind="con" path="com.ibm.etools.mft.uri.classpath.MBProjectReference"/>
+	<classpathentry kind="lib" path="C:/Program Files/IBM/ACE/12.0.5.0/server/classes/bipbroker.jar"/>
+	<classpathentry kind="lib" path="C:/Program Files/IBM/ACE/12.0.5.0/server/classes/brokerutil.jar"/>
+	<classpathentry kind="lib" path="C:/Program Files/IBM/ACE/12.0.5.0/server/classes/cmnCon.jar"/>
+	<classpathentry kind="lib" path="C:/Program Files/IBM/ACE/12.0.5.0/server/classes/connectors.jar"/>
+	<classpathentry kind="lib" path="C:/Program Files/IBM/ACE/12.0.5.0/server/classes/javacompute.jar"/>
+	<classpathentry kind="lib" path="C:/Program Files/IBM/ACE/12.0.5.0/server/classes/jdbcnodes.jar"/>
+	<classpathentry kind="lib" path="C:/Program Files/IBM/ACE/12.0.5.0/server/classes/jmsclient.jar"/>
+	<classpathentry kind="lib" path="C:/Program Files/IBM/ACE/12.0.5.0/server/classes/jplugin2.jar"/>
+	<classpathentry kind="lib" path="C:/Program Files/IBM/ACE/12.0.5.0/server/classes/jplugininternal.jar"/>
+	<classpathentry kind="lib" path="C:/Program Files/IBM/ACE/12.0.5.0/server/classes/jruncompute.jar"/>
+	<classpathentry kind="lib" path="C:/Program Files/IBM/ACE/12.0.5.0/server/classes/junit-platform-console-standalone-1.7.0.jar"/>
+	<classpathentry kind="lib" path="C:/Program Files/IBM/ACE/12.0.5.0/server/classes/ldapSecurityProvider.jar"/>
+	<classpathentry kind="lib" path="C:/Program Files/IBM/ACE/12.0.5.0/server/classes/Map.jar"/>
+	<classpathentry kind="lib" path="C:/Program Files/IBM/ACE/12.0.5.0/server/classes/resmgrapi.jar"/>
+	<classpathentry kind="lib" path="C:/Program Files/IBM/ACE/12.0.5.0/server/classes/rtobjectgen.jar"/>
+	<classpathentry kind="lib" path="C:/Program Files/IBM/ACE/12.0.5.0/server/classes/security.jar"/>
+	<classpathentry kind="lib" path="C:/Program Files/IBM/ACE/12.0.5.0/server/classes/vfdmftcore.jar"/>
+	<classpathentry kind="output" path="bin"/>
+</classpath>

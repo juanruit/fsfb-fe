@@ -1,0 +1,122 @@
+BROKER SCHEMA co.com.admin.services.db
+
+
+CREATE COMPUTE MODULE GetServiceById_CmpCreateMessage
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		/******************************************************/
+		-- Copiar cabeceras de mensaje
+		/******************************************************/
+		SET OutputRoot.MQMD 	= InputRoot.MQMD;
+		SET OutputRoot.MQRFH2 	= InputRoot.MQRFH2;
+		
+		/******************************************************/
+		-- Declarar referencias
+		/******************************************************/
+		DECLARE refEnv REFERENCE TO Environment;
+		DECLARE refMQRFH2 REFERENCE TO OutputRoot.MQRFH2;
+		DECLARE refInpRoot REFERENCE TO OutputRoot;
+		
+		CALL common.procedures.utils.saveMQM(refInpRoot, refEnv);
+		
+		/******************************************************/
+		-- Declarar referencia a objeto de entrada
+		/******************************************************/
+		DECLARE refInp REFERENCE TO InputRoot;
+		IF refMQRFH2.usr.response.formatType = 'XMLNSC' THEN
+			MOVE refInp LASTCHILD;
+			MOVE refInp LASTCHILD;
+		ELSE
+			MOVE refInp LASTCHILD;
+			MOVE refInp LASTCHILD;
+			MOVE refInp LASTCHILD;
+		END IF;
+		
+		/******************************************************/
+		-- Ejecución de tarea
+		/******************************************************/
+		DECLARE resOperation, codeError CHARACTER '';
+		DECLARE result ROW;
+		DECLARE refResult REFERENCE TO result;
+		CALL com.common.utils.dao.getServiceById(refInp.Service.Id,refResult);
+		
+		IF EXISTS(refResult.Service[]) THEN
+			SET codeError = '0000';
+		ELSE
+			SET codeError = '700';	
+		END IF;
+		
+		/******************************************************/
+		-- Creación mensaje de respuesta
+		/******************************************************/
+		--Nombre de mensajes de respuesta
+		DECLARE nmElementRs CHARACTER COALESCE(refMQRFH2.usr.response.WS.nmNode, 'ApplicationFault');
+		
+		/******************************************************/
+		-- Declaración de namespaces propios de servicio
+		/******************************************************/
+		--Creación de mensaje de salida.
+		DECLARE refOut REFERENCE TO OutputRoot;
+		IF refMQRFH2.usr.response.formatType = 'XMLNSC' THEN
+			DECLARE v1 NAMESPACE refMQRFH2.usr.response.WS.namespace.*:v1;
+			CREATE FIELD OutputRoot.XMLNSC.v1:{nmElementRs};
+			MOVE refOut TO OutputRoot.XMLNSC.v1:{nmElementRs};
+		ELSE
+			CREATE FIELD OutputRoot.JSON.Data.{nmElementRs};
+			MOVE refOut TO OutputRoot.JSON.Data.{nmElementRs};			
+		END IF;
+		
+		--Obtener mensaje de error desde base de datos
+		DECLARE data ROW;
+		DECLARE refObjError REFERENCE TO data.objError;
+		CALL com.common.global.cache.getErrorHomologation(codeError, refObjError);
+		
+		SET refOut.ContextTransaction.IdTransaction 					= refMQRFH2.usr.contextTransaction.IdTransaction;
+		SET refOut.ContextTransaction.CodeTransaction 					= refObjError.code;
+		SET refOut.ContextTransaction.DescTransaction 					= refObjError.desc;
+		SET refOut.ContextTransaction.ServerStatus.CodeTransaction 		= codeError;
+		SET refOut.ContextTransaction.ServerStatus.DescTransaction 		= 'Acción Ejecutada';
+		
+		IF CAST(codeError AS INTEGER) = 0 THEN
+			MOVE refResult LASTCHILD;
+			
+			DECLARE i INTEGER 1;
+			FOR refService AS refResult.Info[] DO
+				SET refOut.Services.Service[i].idService 		= refService.PK_ID_SERVICE;
+				SET refOut.Services.Service[i].type 			= refService.TYPE;
+				SET refOut.Services.Service[i].name 			= refService.NAME;
+				SET refOut.Services.Service[i].description 		= refService.DESCRIPTION;
+				SET refOut.Services.Service[i].version 			= refService.VERSION;
+				SET refOut.Services.Service[i].technology 		= refService.TECHNOLOGY;
+				SET refOut.Services.Service[i].interfaceData 	= refService.INTERFACE_DATA;
+				SET refOut.Services.Service[i].logs 			= refService.LOGS;
+				SET refOut.Services.Service[i].notificationError 	= refService.NOTIFICATION_ERROR;
+				SET refOut.Services.Service[i].retryNumber 		= refService.RETRY_NUMBER;
+				SET refOut.Services.Service[i].reverseComponent = refService.COMPONENT_REVERSE;
+				SET refOut.Services.Service[i].timeoutBackend 	= refService.TIMEOUT_BACKEND;
+				SET refOut.Services.Service[i].typeLog 			= refService.TYPE_LOG;
+				SET refOut.Services.Service[i].maskData 		= refService.MASK_DATA;
+				SET refOut.Services.Service[i].maxEmailHour 	= refService.MAX_EMAIL_HOUR;
+				
+				IF refService.MASK_DATA = 1 THEN
+					DECLARE resultDetail ROW;
+					DECLARE refResultDetail REFERENCE TO resultDetail;
+					CALL com.common.utils.dao.getMaskDataServiceById(refService.PK_ID_SERVICE,refResultDetail);
+					
+					DECLARE j INTEGER 1;
+					FOR refMask AS refResultDetail.Service.MaskData[]  DO
+						SET refOut.Services.Service[i].MaskData[j].idMaskData 	= refMask.PK_ID_MASK_DATA;
+						SET refOut.Services.Service[i].MaskData[j].typeMessage 	= refMask.TYPE_MESSAGE;
+						SET refOut.Services.Service[i].MaskData[j].pathData 	= refMask.PATH_DATA;
+						SET refOut.Services.Service[i].MaskData[j].maskType 	= refMask.MASK_TYPE;
+						SET refOut.Services.Service[i].MaskData[j].idLog 		= refMask.ID_LOGS;
+						SET j = j+1;			
+					END FOR;
+				END IF;
+				SET i = i+1;	
+			END FOR;
+		END IF;
+		
+		RETURN TRUE;
+	END;
+END MODULE;

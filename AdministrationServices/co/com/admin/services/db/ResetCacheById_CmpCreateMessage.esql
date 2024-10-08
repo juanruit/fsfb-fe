@@ -1,0 +1,81 @@
+BROKER SCHEMA co.com.admin.services.db
+
+CREATE COMPUTE MODULE ResetCacheById_CmpCreateMessage
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		/******************************************************/
+		-- Copiar cabeceras de mensaje
+		/******************************************************/
+		SET OutputRoot.MQMD 	= InputRoot.MQMD;
+		SET OutputRoot.MQRFH2 	= InputRoot.MQRFH2;
+		
+		/******************************************************/
+		-- Declarar referencias
+		/******************************************************/
+		DECLARE refEnv REFERENCE TO Environment;
+		DECLARE refMQRFH2 REFERENCE TO OutputRoot.MQRFH2;
+		DECLARE refInpRoot REFERENCE TO OutputRoot;
+		
+		CALL common.procedures.utils.saveMQM(refInpRoot, refEnv);
+		
+		/******************************************************/
+		-- Declarar referencia a objeto de entrada
+		/******************************************************/
+		DECLARE refInp REFERENCE TO InputRoot;
+		IF refMQRFH2.usr.response.formatType = 'XMLNSC' THEN
+			MOVE refInp LASTCHILD;
+			MOVE refInp LASTCHILD;
+		ELSE
+			MOVE refInp LASTCHILD;
+			MOVE refInp LASTCHILD;
+			MOVE refInp LASTCHILD;
+		END IF;
+		
+		/******************************************************/
+		-- Ejecución de tarea
+		/******************************************************/
+		DECLARE resOperation, name, key, codeError CHARACTER '';
+		SET name = refInp.Cache.NameMap;
+		SET key = refInp.Cache.Key;
+		SET resOperation 	= com.common.global.cache.removeGlobalCache(key,name);
+		
+		IF resOperation = 'null' THEN
+			SET codeError = '700';
+		ELSE
+			SET codeError = '0000';	
+		END IF;
+		
+		/******************************************************/
+		-- Creación mensaje de respuesta
+		/******************************************************/
+		--Nombre de mensajes de respuesta
+		DECLARE nmElementRs CHARACTER COALESCE(refMQRFH2.usr.response.WS.nmNode, 'ApplicationFault');
+		
+		/******************************************************/
+		-- Declaración de namespaces propios de servicio
+		/******************************************************/
+		--Creación de mensaje de salida.
+		DECLARE refOut REFERENCE TO OutputRoot;
+		IF refMQRFH2.usr.response.formatType = 'XMLNSC' THEN
+			DECLARE v1 NAMESPACE refMQRFH2.usr.response.WS.namespace.*:v1;
+			CREATE FIELD OutputRoot.XMLNSC.v1:{nmElementRs};
+			MOVE refOut TO OutputRoot.XMLNSC.v1:{nmElementRs};
+		ELSE
+			CREATE FIELD OutputRoot.JSON.Data.{nmElementRs};
+			MOVE refOut TO OutputRoot.JSON.Data.{nmElementRs};			
+		END IF;
+		
+		--Obtener mensaje de error desde base de datos
+		DECLARE data ROW;
+		DECLARE refObjError REFERENCE TO data.objError;
+		CALL com.common.global.cache.getErrorHomologation(codeError, refObjError);
+		
+		SET refOut.ContextTransaction.IdTransaction 					= refMQRFH2.usr.contextTransaction.IdTransaction;
+		SET refOut.ContextTransaction.CodeTransaction 					= refObjError.code;
+		SET refOut.ContextTransaction.DescTransaction 					= refObjError.desc;
+		SET refOut.ContextTransaction.ServerStatus.CodeTransaction 		= codeError;
+		SET refOut.ContextTransaction.ServerStatus.DescTransaction 		= 'Acción Ejecutada';
+		
+		RETURN TRUE;
+	END;
+END MODULE;

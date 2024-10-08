@@ -1,0 +1,70 @@
+BROKER SCHEMA electronic.bill.v2.get.data.db
+
+
+CREATE COMPUTE MODULE GetDataBy_7SUBDETAILFEDOS_TRIBUTOS_GetData
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		SET OutputRoot.Properties.Encoding			= 819;
+		SET OutputRoot.Properties.CodedCharSetId	= 273;
+		
+		SET OutputRoot.MQMD.MsgId 		= InputRoot.MQMD.MsgId;
+		SET OutputRoot.MQMD.CorrelId 	= InputRoot.MQMD.CorrelId;
+		SET OutputRoot.MQMD.ReplyToQ	= InputRoot.MQMD.ReplyToQ;
+		SET OutputRoot.MQRFH2 			= InputRoot.MQRFH2;
+		
+		/******************************************************/
+		-- Declarar referencias
+		/******************************************************/
+		DECLARE refEnv REFERENCE TO Environment;
+		DECLARE refMQRFH2 REFERENCE TO OutputRoot.MQRFH2;
+		DECLARE refInpRoot REFERENCE TO OutputRoot;
+		
+		/******************************************************/
+		-- Setear información para auditoría y headers
+		/******************************************************/
+		CALL common.procedures.utils.saveMQM(refInpRoot, refEnv);
+		
+		DECLARE refInp REFERENCE TO InputRoot.XMLNSC;
+		MOVE refInp LASTCHILD;
+		MOVE refInp LASTCHILD;
+		
+		DECLARE sql CHARACTER '';
+		CREATE FIELD OutputRoot.XMLNSC.SubDetailFedosTributosRs;
+		DECLARE refOut REFERENCE TO OutputRoot.XMLNSC.SubDetailFedosTributosRs;
+		
+		SET sql = 'SELECT DET_VLRCODIGOESTANDAR AS DET_VLRCODIGOESTANDAR, DET_TRIBUTOS_ID, DET_TRIBUTOS_ESIMPUESTO, SUM(DET_TRIBUTOS_VLRIMPORTE) DET_TRIBUTOS_VLRIMPORTE, DET_TRIBUTOS_VLRIMPORTEMON, SUM(DET_TRIBUTOS_VLRBASE) DET_TRIBUTOS_VLRBASE, DET_TRIBUTOS_VLRBASEMONEDA, DETALLE_TRIBUTOS_PORCENTAJE
+				FROM ADMSALUD.DETAILFEDOS SDET
+				WHERE SDET.FCT_ID = ? AND SDET.FCT_IDD = ?
+				GROUP BY DET_VLRCODIGOESTANDAR,DET_TRIBUTOS_ID, DET_TRIBUTOS_ESIMPUESTO, DET_TRIBUTOS_VLRIMPORTEMON, DET_TRIBUTOS_VLRBASEMONEDA, DETALLE_TRIBUTOS_PORCENTAJE';
+		
+		/*******************************************************************************************/
+		DECLARE refResult REFERENCE TO Environment.Variables.result;
+		CREATE LASTCHILD OF refResult DOMAIN 'XMLNSC' NAME 'XMLNSC';
+		MOVE refResult TO refResult.XMLNSC;
+		SET refResult.result.subDetalleFedosTributos[] =  PASSTHRU(sql,refInp.FCT_ID,refInp.FCTIDD);		 
+		
+		DECLARE data ROW;
+		DECLARE refData REFERENCE  TO data;
+		
+		IF CARDINALITY(refResult.result.subDetalleFedosTributos[]) > 0 THEN
+			CALL com.common.utils.procedures.parseMessage(refResult,DEFAULT_ENCODING,DEFAULT_CCSID,refData);
+			--DECLARE key CHARACTER CAST(refInp.FCT_ID AS CHARACTER)||CAST(refInp.FCTIDD AS CHARACTER)||'SUBDETAILFEDOSTRIBUTOS';
+			DECLARE key CHARACTER UUIDASCHAR;
+			DECLARE tmp CHARACTER com.common.global.cache.putGlobalCache(key,refData.message,HOMOLOGATION_MAPPING);
+			
+			--Creación del mensaje de error de fachada
+			SET refOut.ContextTransaction.IdTransaction 		= COALESCE(refMQRFH2.usr.contextTransaction.IdTransaction,'00000');
+			SET refOut.Status.Code								= 'T';
+			SET refOut.Status.Desc								= 'Transacción exitosa';
+			SET refOut.Status.Cache.Id							= key;
+			SET refOut.Status.Cache.NmCache						= HOMOLOGATION_MAPPING;		
+		ELSE
+			--Creación del mensaje de error de fachada
+			SET refOut.ContextTransaction.IdTransaction 		= COALESCE(refMQRFH2.usr.contextTransaction.IdTransaction,'00000');
+			SET refOut.Status.Code								= 'E';
+			SET refOut.Status.Desc								= 'Transacción no exitosa';
+		END IF;
+		
+		RETURN TRUE;
+	END;
+END MODULE;

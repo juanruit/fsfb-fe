@@ -1,0 +1,116 @@
+BROKER SCHEMA electronic.bill.v2.validate.bill
+
+CREATE COMPUTE MODULE ValidateBill_UpdateResponse
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		DECLARE NM_COMPONENT CHARACTER 'VALIDATE.BILL.V2';
+		DECLARE SERVICE_RQ_TRACE INTEGER 2;
+		
+		/******************************************************/
+		-- Copiar cabeceras de mensaje
+		/******************************************************/
+		SET OutputRoot.MQMD 	= InputRoot.MQMD;
+		SET OutputRoot.MQRFH2 	= InputRoot.MQRFH2;
+		
+		/******************************************************/
+		-- Declarar referencias
+		/******************************************************/
+		DECLARE refEnv REFERENCE TO Environment;
+		DECLARE refMQRFH2 REFERENCE TO OutputRoot.MQRFH2;
+		DECLARE refInpRoot REFERENCE TO OutputRoot;
+		
+		/******************************************************/
+		-- Setear información para auditoría y headers
+		/******************************************************/
+		CALL common.procedures.utils.createMsgLogs(refMQRFH2, SERVICE_RQ_TRACE, NM_COMPONENT);
+		CALL common.procedures.utils.saveMQM(refInpRoot, refEnv);
+		
+		/******************************************************/
+		-- Declarar referencia a objeto de entrada
+		/******************************************************/
+		DECLARE sql CHARACTER '';
+		DECLARE refInp REFERENCE TO InputRoot.JSON;
+		MOVE refInp LASTCHILD;
+		
+		DECLARE FCT_STATUS, FCT_IDENT, FCT_CUFE_CUDE, FCT_RESPTRANSACCION, FCT_QR, ERRORES, FECHA_RESP_TRANSFIRIENDO, FECHA_GENERACION_URL, DMTO_URLPDF CHARACTER '';
+		
+		SET FCT_IDENT 				= FIELDVALUE(refInp.identificador);
+		SET FCT_RESPTRANSACCION 	= FIELDVALUE(refInp.mensaje);
+		
+		IF FIELDVALUE(refInp.esExitoso) THEN
+			SET FCT_STATUS 					= 'T';
+			SET ERRORES 					= '';
+			
+			IF EXISTS(refInp.cuentaMedica[]) THEN
+				SET FCT_QR 						= FIELDVALUE(refInp.cuentaMedica.resultado.QR);
+				SET FECHA_RESP_TRANSFIRIENDO 	= FIELDVALUE(refInp.cuentaMedica.resultado.fechaValidacionDian);
+				SET FCT_CUFE_CUDE  				= FIELDVALUE(refInp.cuentaMedica.resultado.UUID);
+				SET DMTO_URLPDF 				= FIELDVALUE(refInp.cuentaMedica.resultado.URLPDF);
+			END IF;
+			
+			IF EXISTS(refInp.factura[]) THEN
+				SET FCT_QR 						= FIELDVALUE(refInp.factura.resultado.QR);
+				SET FECHA_RESP_TRANSFIRIENDO 	= FIELDVALUE(refInp.factura.resultado.fechaValidacionDian);
+				SET FCT_CUFE_CUDE  				= FIELDVALUE(refInp.factura.resultado.UUID);
+				SET DMTO_URLPDF 				= FIELDVALUE(refInp.factura.resultado.URLPDF);
+			END IF;
+			
+			
+			SET sql = 'SELECT  FCT_ID, FCTIDD FROM ADMSALUD.RESPONSECTRLBUS where FCT_IDENT = ?';
+			DECLARE refResult REFERENCE TO Environment.result;
+			SET refResult.data[] = PASSTHRU(sql,FCT_IDENT);
+			
+			IF EXISTS(refResult.data[]) THEN
+				SET sql = 'UPDATE ADMSALUD.HEADFEDOS SET DMTO_URLPDF = ? where FCT_ID = ? AND FCT_IDD = ?';
+				PASSTHRU(sql,DMTO_URLPDF,refResult.data.FCT_ID,refResult.data.FCTIDD);	
+			END IF;
+			
+		ELSE
+			SET FCT_STATUS 					= 'E';
+			SET DMTO_URLPDF 				= 'NA';
+			
+			IF EXISTS(refInp.factura[]) THEN
+				MOVE refInp TO refInp.factura;
+				FOR error AS refInp.errores.Item[] DO
+					SET ERRORES = ERRORES || ' - ' || FIELDVALUE(error.mensaje);
+				END FOR;
+				MOVE refInp PARENT;
+			END IF;
+			
+			IF EXISTS(refInp.cuentaMedica[]) THEN
+				MOVE refInp TO refInp.cuentaMedica;
+				FOR error AS refInp.errors.Item[] DO
+					SET ERRORES = ERRORES || ' - ' || FIELDVALUE(error.message);
+				END FOR;
+				MOVE refInp PARENT;
+			END IF;
+		END IF;
+		
+		SET FECHA_GENERACION_URL 	= CURRENT_DATE;
+		
+		SET sql = 'UPDATE ADMSALUD.RESPONSECTRLBUS SET FCT_STATUS = ?, FCT_CUFE_CUDE = ?, FCT_RESPTRANSACCION = ?, FCT_QR = ?, ERRORES = ?, FECHA_RESP_TRANSFIRIENDO = ?, FECHA_GENERACION_URL = ? WHERE FCT_IDENT = ?';
+		PASSTHRU(sql,
+			FCT_STATUS,
+			FCT_CUFE_CUDE,
+			FCT_RESPTRANSACCION,
+			FCT_QR,
+			SUBSTRING(ERRORES FROM 1 FOR 1000),
+			FECHA_RESP_TRANSFIRIENDO,
+			FECHA_GENERACION_URL,
+			FCT_IDENT);
+		
+		/******************************************************/
+		-- Declaración de namespaces propios de servicio
+		/******************************************************/
+		--Creación de mensaje de salida.
+		DECLARE refOut REFERENCE TO OutputRoot;
+		CREATE FIELD OutputRoot.JSON.Data.ValidateRs;
+		MOVE refOut TO OutputRoot.JSON.Data.ValidateRs;
+				
+		SET refOut.ContextTransaction.IdTransaction 					= refMQRFH2.usr.contextTransaction.IdTransaction;
+		SET refOut.ContextTransaction.CodeTransaction 					= 'P';
+		SET refOut.ContextTransaction.DescTransaction 					= 'Trasnacción Exitosa';	
+		
+		RETURN TRUE;
+	END;
+END MODULE;

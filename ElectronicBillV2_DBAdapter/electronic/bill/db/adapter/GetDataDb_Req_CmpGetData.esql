@@ -1,0 +1,52 @@
+BROKER SCHEMA electronic.bill.db.adapter
+
+--definicion de constantes
+DECLARE FACADE_MQ CONSTANT CHARACTER '.FCD.MQ';
+DECLARE PREFIX_QUEUE CONSTANT CHARACTER 'MQINP.';
+DECLARE SUFIX_QUEUE CONSTANT CHARACTER '.REQ';
+
+CREATE COMPUTE MODULE GetDataDb_Req_CmpGetData
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		--Crear cabeceras MQ
+    CREATE FIELD OutputRoot.Properties;
+    CREATE FIELD OutputRoot.MQMD;
+    CREATE FIELD OutputRoot.MQRFH2;
+    
+    --Crear mensaje XML para envío a fachada
+    CREATE FIELD OutputRoot.XMLNSC.InvoiceReq;
+    DECLARE refOut REFERENCE TO OutputRoot.XMLNSC.InvoiceReq;
+    
+    DECLARE sql CHARACTER 'select * from ADMSALUD.RESPONSECTRLBUS WHERE FCT_STATUS = ? AND rownum < ?';
+        
+    DECLARE data ROW;
+    SET data.results = PASSTHRU(sql,'N',50);
+    
+    FOR refData AS data.results[]  DO
+      DECLARE nmProvider, backend CHARACTER '';
+      
+      DECLARE refTmp REFERENCE TO refData;
+      
+      
+      -- Enviar mensaje a fachada..
+      SET OutputRoot.MQRFH2.usr.response.DB.fct_id   			= refData.FCT_ID;
+      SET OutputRoot.MQRFH2.usr.response.DB.fct_idd   			= refData.FCTIDD;
+      SET OutputRoot.MQRFH2.usr.contextTransaction.identifier	= refData.FCT_IDENT;
+      
+      -- Definición de mensaje estándar para transacción
+      SET refOut.ContextTransaction.IdTransaction       = CAST(CURRENT_GMTTIMESTAMP AS CHARACTER FORMAT 'YYYYmmddHHmmss')|| '_' || CAST(refData.FCT_ID AS CHARACTER);
+      SET refOut.ContextTransaction.Operation         	= 'SENDBILL';
+      SET refOut.ContextTransaction.ApiName         	= 'ELECTRONICBILL.V2';
+      SET refOut.ContextTransaction.Interface         	= 'CMP.TRANS';
+      
+      -- Cuerpo del mensaje
+      SET refOut.Message                    = refData;
+      
+      --Enviar mensaje a fachada y flujo que cambia estado de transacción.
+      PROPAGATE TO TERMINAL 'out' DELETE NONE;
+      PROPAGATE TO TERMINAL 'out1' DELETE NONE;
+    END FOR;
+    RETURN FALSE;
+				
+	END;
+END MODULE;
